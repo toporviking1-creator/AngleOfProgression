@@ -7,20 +7,23 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AoP">
 <meta name="description" content="Расчёт угла прогрессии (AoP) по фото экрана трансперинеального УЗИ">
 <title>AoP по фото УЗИ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Unbounded:wght@600&display=swap">
 <style>
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0}
-img{max-width:100%}
 [hidden]{display:none!important}
-/* Layout: one column "консоль УЗИ" — кадр сверху, ход разметки и результат под ним; на широком экране результат справа */
+/* Layout: одна колонка «консоль УЗИ» — кадр сверху, ход разметки и результат под ним; на широком экране панели справа */
 :root{
   --bg:#0a0d10; --panel:#141a20; --line:#2a333c;
-  --fg:#f4f7fa; --muted:#cfd8e0;
-  --cyan:#4fd8ff; --amber:#ffb627; --good:#3ee08f; --warn:#ff8a5c;
+  --fg:#f4f7fa; --muted:#cfd8e0; --dim:#8d9aa6;
+  --cyan:#4fd8ff; --amber:#ffb627; --magenta:#ff5ce1; --good:#3ee08f; --warn:#ff8a5c;
   --display:"Unbounded","IBM Plex Sans",system-ui,sans-serif;
   --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -28,45 +31,87 @@ img{max-width:100%}
 }
 html{background:var(--bg)}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45;padding-inline:16px;padding-block:calc(16px + env(safe-area-inset-top,0px)) calc(32px + env(safe-area-inset-bottom,0px))}
-.wrap{max-width:1100px;margin:0 auto;display:grid;gap:16px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:16px}
 header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px}
 h1{font-family:var(--display);font-size:1.25rem;margin:0;letter-spacing:.01em;text-wrap:balance}
 h1 span{color:var(--amber)}
 .sub{color:var(--muted);font-size:.9rem;margin:0}
 .main{display:grid;gap:16px;grid-template-columns:1fr}
-@media(min-width:900px){.main{grid-template-columns:minmax(0,1fr) 320px;align-items:start}}
-.stage{position:relative;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
-canvas#cv{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair}
+@media(min-width:900px){.main{grid-template-columns:minmax(0,1fr) 340px;align-items:start}.stagecol{position:sticky;top:16px}}
+.stagecol{display:grid;gap:8px;min-width:0}
+.stage{position:relative;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0;display:flex;justify-content:center}
+canvas#cv{display:block;touch-action:none;cursor:crosshair;max-width:100%}
 .badge{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.75);color:var(--amber);border:1px solid var(--amber);font:600 .75rem var(--mono);letter-spacing:.08em;padding:3px 8px;border-radius:4px;pointer-events:none}
 #loupe{position:absolute;top:10px;left:10px;width:130px;height:130px;border:2px solid var(--fg);border-radius:50%;background:#000;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,.6)}
+.zoom{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
+.zoom button{width:40px;height:40px;padding:0;font:600 1.1rem var(--mono);background:rgba(20,26,32,.85)}
+#zlvl{position:absolute;left:10px;bottom:10px;font:600 .75rem var(--mono);color:var(--muted);background:rgba(0,0,0,.7);padding:3px 7px;border-radius:4px;pointer-events:none}
 .drop{outline:3px dashed var(--amber);outline-offset:-6px}
+.stagehint{font-size:.8rem;color:var(--dim);margin:0}
+.coarse{display:none}@media(pointer:coarse){.coarse{display:inline}.fine{display:none}}
 .side{display:grid;gap:12px;min-width:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
 .steps{display:flex;gap:6px;margin-bottom:10px}
 .chip{flex:1;text-align:center;font:600 .8rem var(--mono);padding:6px 0;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
 .chip.done{background:#1d2a33;color:var(--fg);border-color:#3a4a56}
 .chip.now{background:var(--amber);color:#111;border-color:var(--amber)}
-#hint{margin:0;font-size:.95rem;min-height:3em}
+#hint{margin:10px 0 0;font-size:.95rem;min-height:3em}
 .btns{display:flex;flex-wrap:wrap;gap:8px}
-button,.file{font:600 .9rem var(--body);color:var(--fg);background:#1f2830;border:1px solid #3a4651;border-radius:8px;padding:10px 14px;cursor:pointer}
-button:hover,.file:hover{border-color:var(--fg)}
-button:focus-visible,.file:focus-within{outline:2px solid var(--amber);outline-offset:2px}
-.file.primary{background:var(--amber);color:#111;border-color:var(--amber)}
+button,.file{font:600 .9rem var(--body);color:var(--fg);background:#1f2830;border:1px solid #3a4651;border-radius:8px;padding:10px 14px;cursor:pointer;touch-action:manipulation}
+button:hover:not(:disabled),.file:hover{border-color:var(--fg)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,.file:focus-within,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.file.primary,button.primary{background:var(--amber);color:#111;border-color:var(--amber)}
 .file input{position:absolute;width:1px;height:1px;opacity:0}
-.file{position:relative}
-.lbl{font:600 .72rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.file{position:relative;display:inline-block}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;border-radius:0;background:transparent;padding:8px 6px;font-size:.82rem;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:#2a3742;color:var(--fg);box-shadow:inset 0 -3px 0 var(--amber)}
+.lbl{font:600 .72rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.nudge{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.nudge span{flex:1 1 100%;font-size:.82rem;color:var(--muted)}
+.nudge button{padding:8px 0;width:42px;font-family:var(--mono)}
+.nudge #del{width:auto;padding:8px 12px;margin-left:auto}
 #deg{font:600 3.4rem/1 var(--mono);font-variant-numeric:tabular-nums;margin:0;color:var(--fg)}
 #deg small{font-size:1.4rem;color:var(--muted)}
+.gauge{position:relative;height:10px;border-radius:5px;margin:14px 0 4px}
+.gauge i{position:absolute;top:-4px;width:2px;height:18px;background:var(--fg)}
+.gauge #gmark{width:4px;margin-left:-2px;top:-6px;height:22px;border-radius:2px;background:#fff;box-shadow:0 0 0 2px #000}
+.gscale{display:flex;justify-content:space-between;font:500 .72rem var(--mono);color:var(--dim)}
 #verdict{margin-top:10px;padding:8px 10px;border-radius:6px;font-size:.92rem;border-left:4px solid var(--line);background:#0f1418}
 #verdict.good{border-color:var(--good)}
 #verdict.warn{border-color:var(--warn)}
 #verdict b{display:block}
+.warns{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.warns li{font-size:.86rem;padding:7px 10px;border-radius:6px;background:#2a1a12;border:1px solid #6b3a24;color:#ffd3c2}
+.warns li.err{background:#3a1216;border-color:#8a2a33;color:#ffd0d4}
 .note{font-size:.88rem;color:var(--muted);margin:0}
 .note li{margin-bottom:4px}
-.note ul{margin:0;padding-left:18px}
-.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.85rem;margin-top:8px}
+ul.note{margin:0;padding-left:18px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.85rem;margin-top:10px}
 .legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:6px}
-#toast{font-size:.85rem;color:var(--good);min-height:1.2em;margin-top:6px}
+#toast{font-size:.85rem;color:var(--good);min-height:1.2em;margin-top:6px;overflow-wrap:anywhere}
+.row{display:grid;grid-template-columns:90px 1fr 40px;align-items:center;gap:8px;font-size:.85rem;color:var(--muted);margin-bottom:6px}
+.row output{font:500 .8rem var(--mono);text-align:right}
+input[type=range]{width:100%;accent-color:var(--amber)}
+select,input[type=text]{font:500 .9rem var(--body);color:var(--fg);background:#0f1418;border:1px solid #3a4651;border-radius:8px;padding:9px 10px;min-width:0}
+input[type=text]{width:100%}
+.rectbox{margin-top:10px;padding:10px;border:1px solid var(--magenta);border-radius:8px;display:grid;gap:8px}
+.rectbox label{font-size:.85rem;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#rectinfo{font-size:.82rem;color:var(--muted);margin:8px 0 0}
+.log{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;max-height:340px;overflow:auto}
+.log li{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;background:#0f1418;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.log .v{font:600 1.15rem var(--mono)}
+.log .m{font-size:.8rem;color:var(--muted)}
+.log .t{font:500 .8rem var(--mono);color:var(--dim)}
+.log .d{font:500 .8rem var(--mono)}
+.log .x{grid-row:span 2;padding:4px 10px;font-size:.85rem;background:transparent}
+.log .n{grid-column:1/3;font-size:.82rem;color:var(--muted);overflow-wrap:anywhere}
+.empty{font-size:.85rem;color:var(--dim);margin:10px 0}
+details.panel summary{cursor:pointer;font:600 .72rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+details.panel[open] summary{margin-bottom:8px}
+kbd{font:500 .78rem var(--mono);background:#0f1418;border:1px solid var(--line);border-radius:4px;padding:0 4px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -75,14 +120,23 @@ button:focus-visible,.file:focus-within{outline:2px solid var(--amber);outline-o
 <div class="wrap">
   <header>
     <h1>Угол прогрессии <span>AoP</span></h1>
-    <p class="sub">Трансперинеальное УЗИ · ручная разметка по фото экрана</p>
+    <p class="sub">Трансперинеальное УЗИ · разметка по фото экрана</p>
   </header>
 
   <div class="main">
-    <div class="stage" id="stage">
-      <canvas id="cv" width="900" height="760" aria-label="Изображение УЗИ для разметки"></canvas>
-      <canvas id="loupe" width="260" height="260" hidden></canvas>
-      <div class="badge" id="badge">ПРИМЕР</div>
+    <div class="stagecol">
+      <div class="stage" id="stage">
+        <canvas id="cv" width="900" height="760" aria-label="Изображение УЗИ для разметки"></canvas>
+        <canvas id="loupe" width="260" height="260" hidden></canvas>
+        <div class="badge" id="badge">ПРИМЕР</div>
+        <div id="zlvl" hidden></div>
+        <div class="zoom">
+          <button id="zin" type="button" aria-label="Увеличить" title="Увеличить">+</button>
+          <button id="zout" type="button" aria-label="Уменьшить" title="Уменьшить">−</button>
+          <button id="zfit" type="button" aria-label="Вписать целиком" title="Вписать целиком">⤢</button>
+        </div>
+      </div>
+      <p class="stagehint"><span class="fine">Клик — точка, перетаскивание — сдвиг точки. <kbd>Ctrl</kbd>+колесо или двойной клик — масштаб, при увеличении кадр двигается мышью.</span><span class="coarse">Тап — точка, перетаскивание — сдвиг точки. Два пальца — масштаб, при увеличении одним пальцем двигается кадр.</span></p>
     </div>
 
     <div class="side">
@@ -92,20 +146,46 @@ button:focus-visible,.file:focus-within{outline:2px solid var(--amber);outline-o
           <div class="chip" id="c1">2 · низ</div>
           <div class="chip" id="c2">3 · череп</div>
         </div>
+        <div class="seg" role="group" aria-label="Способ построения касательной">
+          <button type="button" id="mContour" aria-pressed="true">Контур черепа · авто</button>
+          <button type="button" id="mManual" aria-pressed="false">Касательная вручную</button>
+        </div>
         <p id="hint"></p>
         <div class="btns" style="margin-top:10px">
           <label class="file primary">Загрузить фото<input type="file" id="file" accept="image/*"></label>
-          <button id="undo" type="button">Отменить точку</button>
+          <label class="file">Камера<input type="file" id="cam" accept="image/*" capture="environment"></label>
+          <button id="undo" type="button">Отменить</button>
           <button id="reset" type="button">Сбросить</button>
+        </div>
+        <div class="nudge" id="nudge">
+          <span id="selname">Точка не выбрана</span>
+          <button type="button" data-d="-1,0" aria-label="Сдвинуть влево">←</button>
+          <button type="button" data-d="0,-1" aria-label="Сдвинуть вверх">↑</button>
+          <button type="button" data-d="0,1" aria-label="Сдвинуть вниз">↓</button>
+          <button type="button" data-d="1,0" aria-label="Сдвинуть вправо">→</button>
+          <button type="button" id="del">Удалить</button>
         </div>
       </div>
 
       <div class="panel">
         <p class="lbl">Угол прогрессии</p>
         <p id="deg">—</p>
+        <div class="seg" role="group" aria-label="Период родов" style="margin-top:12px">
+          <button type="button" id="p1" aria-pressed="false">I период</button>
+          <button type="button" id="p2" aria-pressed="true">II период</button>
+        </div>
+        <div id="gaugebox" hidden>
+          <div class="gauge" id="gauge"><i id="gthr"></i><i id="gmark"></i></div>
+          <div class="gscale"><span>80°</span><span>130°</span><span>180°</span></div>
+        </div>
         <div id="verdict" hidden></div>
-        <div class="btns" style="margin-top:10px"><button id="copy" type="button">Копировать результат</button></div>
-        <div id="toast"></div>
+        <ul class="warns" id="warns"></ul>
+        <div class="btns" style="margin-top:12px">
+          <button id="save" type="button" class="primary">В журнал</button>
+          <button id="copy" type="button">Копировать</button>
+          <button id="png" type="button">Снимок PNG</button>
+        </div>
+        <div id="toast" role="status"></div>
         <div class="legend">
           <span><i style="background:var(--cyan)"></i>ось симфиза</span>
           <span><i style="background:var(--amber)"></i>касательная к черепу</span>
@@ -113,175 +193,718 @@ button:focus-visible,.file:focus-within{outline:2px solid var(--amber);outline-o
       </div>
 
       <div class="panel">
-        <p class="lbl">Как разметить</p>
+        <p class="lbl">Снимок</p>
+        <div class="row"><span>Яркость</span><input type="range" id="bri" min="-100" max="100" value="0"><output id="briV">0</output></div>
+        <div class="row"><span>Контраст</span><input type="range" id="con" min="-50" max="150" value="0"><output id="conV">0</output></div>
+        <div class="btns">
+          <button id="auto" type="button">Авто-контраст</button>
+          <button id="inv" type="button" aria-pressed="false">Инверсия</button>
+          <button id="adjReset" type="button">Без коррекции</button>
+        </div>
+        <div class="btns" style="margin-top:10px">
+          <button id="rectGo" type="button">Выпрямить экран</button>
+          <button id="rectUndo" type="button" hidden>Вернуть исходное фото</button>
+        </div>
+        <div class="rectbox" id="rectbox" hidden>
+          <label>Соотношение сторон отмеченного прямоугольника
+            <select id="aspect">
+              <option value="auto">авто (по перспективе)</option>
+              <option value="1.7778">16:9</option>
+              <option value="1.6">16:10</option>
+              <option value="1.3333">4:3</option>
+              <option value="1.25">5:4</option>
+              <option value="1">1:1</option>
+            </select>
+          </label>
+          <div class="btns">
+            <button id="rectApply" type="button" class="primary" disabled>Применить</button>
+            <button id="rectCancel" type="button">Отмена</button>
+          </div>
+        </div>
+        <p id="rectinfo">Фото снято под углом? Перекос камеры искажает AoP. «Выпрямить экран» — отметь 4 угла экрана или рамки кадра, и снимок будет приведён к виду «строго спереди».</p>
+      </div>
+
+      <div class="panel">
+        <p class="lbl">Журнал измерений</p>
+        <input type="text" id="note" maxlength="120" placeholder="Комментарий к следующей записи (необязательно)">
+        <ul class="log" id="log"></ul>
+        <div class="btns">
+          <button id="logCopy" type="button">Копировать журнал</button>
+          <button id="logClear" type="button">Очистить</button>
+        </div>
+        <p class="note" style="margin-top:8px">Хранится только в этом браузере. Изменение AoP во времени информативнее, чем одно значение.</p>
+      </div>
+
+      <details class="panel">
+        <summary>Как разметить</summary>
         <ul class="note">
-          <li>Тап ставит точку, перетаскивание двигает. Лупа показывает место под пальцем.</li>
-          <li>Точки 1–2 — концы длинной оси симфиза. Точка 2 — нижний край, вершина угла.</li>
-          <li>Точка 3 — на самом ведущем участке кости черепа. Жёлтая линия касается контура и не заходит внутрь.</li>
-          <li>Фото экрана снимай строго перпендикулярно: перекос камеры искажает угол.</li>
+          <li>Точки 1–2 — концы длинной оси симфиза. Точка 2 — нижний (каудальный) край, вершина угла.</li>
+          <li><b>Контур черепа · авто:</b> поставь 3–6 точек по наружному краю кости черепа в месте, где к нему подходит касательная. Приложение подберёт дугу и само проведёт касательную из точки 2 — субъективный выбор точки касания уходит.</li>
+          <li><b>Касательная вручную:</b> точка 3 ставится в место касания, жёлтая линия должна касаться контура и не заходить внутрь.</li>
+          <li>Увеличь кадр двумя пальцами и уточняй точки стрелками в панели разметки (на клавиатуре: стрелки, <kbd>Shift</kbd> — шаг 10 px, <kbd>Ctrl</kbd>+<kbd>Z</kbd> — отмена, <kbd>Del</kbd> — удалить точку).</li>
+          <li>Снимай экран как можно ровнее; если не получилось — «Выпрямить экран».</li>
+          <li>Перед отправкой PNG проверь, что в кадре нет ФИО и других данных пациентки.</li>
           <li>Ориентир для разговора с клиникой, не самостоятельное основание для решения.</li>
         </ul>
-      </div>
+      </details>
     </div>
   </div>
 </div>
 
 <script>
 (function(){
-const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
-const loupe=document.getElementById('loupe'),lctx=loupe.getContext('2d');
-const stage=document.getElementById('stage');
-const hintEl=document.getElementById('hint'),degEl=document.getElementById('deg'),verdict=document.getElementById('verdict');
-const toast=document.getElementById('toast'),badge=document.getElementById('badge');
-let src=null,pts=[],drag=-1;
+'use strict';
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d'),loupe=$('loupe'),lctx=loupe.getContext('2d'),stage=$('stage');
+const toastEl=$('toast'),badge=$('badge');
+const CY='#4fd8ff',AM='#ffb627',MG='#ff5ce1';
+const MAXC=12,MAXSIDE=2000,MAXZ=10,TAU=Math.PI*2,DEG=180/Math.PI;
 
-const HINTS=[
- 'Точка 1 — верхний (краниальный) конец симфиза.',
- 'Точка 2 — нижний (каудальный) конец симфиза. Это вершина угла.',
- 'Точка 3 — точка касания на ведущем контуре черепа.',
- 'Готово. Перетащи любую точку, чтобы уточнить положение.'
-];
+const store={
+  get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(_){return d;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(_){}}
+};
+
+const S={
+  orig:null,base:null,view:null,Hcum:null,
+  sym:[],cont:[],man:null,rect:null,sel:null,
+  mode:store.get('aop-mode','contour')==='manual'?'manual':'contour',
+  phase:store.get('aop-phase','2')==='1'?'1':'2',
+  adj:{b:0,c:0,inv:false},
+  z:1,tx:0,ty:0,cssW:0,cssH:0,dpr:1
+};
+let undoStack=[];
+
+/* ---------- геометрия ---------- */
+const sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y}),len=v=>Math.hypot(v.x,v.y);
+const dot=(a,b)=>a.x*b.x+a.y*b.y,crs=(a,b)=>a.x*b.y-a.y*b.x;
+const norm=a=>((a%TAU)+TAU)%TAU;
+function angle3(A,B,C){const v=sub(A,B),w=sub(C,B);return Math.atan2(Math.abs(crs(v,w)),dot(v,w))*DEG;}
+
+// Окружность по точкам: алгебраический МНК (Kåsa); для трёх точек — точная описанная
+function fitCircle(P){
+  const n=P.length;let mx=0,my=0;for(const p of P){mx+=p.x;my+=p.y;}mx/=n;my/=n;
+  let suu=0,svv=0,suv=0,suuu=0,svvv=0,suvv=0,svuu=0;
+  for(const p of P){const u=p.x-mx,v=p.y-my;suu+=u*u;svv+=v*v;suv+=u*v;suuu+=u*u*u;svvv+=v*v*v;suvv+=u*v*v;svuu+=v*u*u;}
+  const det=suu*svv-suv*suv;if(Math.abs(det)<1e-9*(suu*svv+1))return null;
+  const b1=(suuu+suvv)/2,b2=(svvv+svuu)/2,uc=(b1*svv-b2*suv)/det,vc=(b2*suu-b1*suv)/det;
+  const c={x:uc+mx,y:vc+my},r=Math.sqrt(uc*uc+vc*vc+(suu+svv)/n);
+  let ss=0;for(const p of P){const e=len(sub(p,c))-r;ss+=e*e;}
+  return{c,r,rms:Math.sqrt(ss/n)};
+}
+// Минимальная дуга, покрывающая все углы
+function arcSpan(a){
+  const s=a.map(norm).sort((p,q)=>p-q);let gi=s.length-1,g=s[0]+TAU-s[s.length-1];
+  for(let i=0;i<s.length-1;i++){const d=s[i+1]-s[i];if(d>g){g=d;gi=i;}}
+  return{start:s[(gi+1)%s.length],w:TAU-g};
+}
+function outsideArc(t,sp){const d=norm(t-sp.start);return d<=sp.w?0:Math.min(d-sp.w,TAU-d);}
+
+function measure(){
+  const R={aop:null,warn:[],err:null};
+  if(!S.base||S.sym.length<2)return R;
+  const [A,B]=S.sym,diag=Math.hypot(S.base.width,S.base.height);
+  if(len(sub(A,B))<diag*0.04)R.warn.push('Ось симфиза очень короткая — точки 1 и 2 стоят слишком близко, угол будет неточным.');
+  const v=sub(A,B),a1=Math.atan2(v.y,v.x);
+  if(S.mode==='contour'){
+    if(S.cont.length<3)return R;
+    const f=fitCircle(S.cont);
+    if(!f||f.r>diag*4){R.err='Точки контура лежат почти на прямой — расставь их по дуге черепа.';return R;}
+    R.circle=f;
+    const w=sub(f.c,B),d=len(w);
+    if(d<=f.r*1.001){R.err='Точка 2 оказалась внутри подобранного контура черепа. Точки контура должны лежать по наружному краю кости, а точка 2 — на нижнем крае симфиза.';return R;}
+    // Ориентированный угол: от оси симфиза в сторону головки + полуугол касательной; работает и за 180°
+    const s=crs(v,w)>=0?1:-1,phi=Math.atan2(Math.abs(crs(v,w)),dot(v,w)),a=phi+Math.asin(f.r/d);
+    const th=a1+s*a,L=Math.sqrt(d*d-f.r*f.r);
+    R.T={x:B.x+L*Math.cos(th),y:B.y+L*Math.sin(th)};
+    R.aop=a*DEG;R.sweep={a1,s,a};
+    const sp=arcSpan(S.cont.map(p=>Math.atan2(p.y-f.c.y,p.x-f.c.x)));R.span=sp;
+    if(f.rms>Math.max(2,f.r*0.02))R.warn.push(`Точки контура плохо ложатся на одну дугу (разброс ${f.rms.toFixed(1)} px). Убери выбивающуюся точку или ставь точки на меньшем участке кости.`);
+    if(sp.w*DEG<20)R.warn.push('Точки контура стоят слишком кучно — дуга подбирается неустойчиво. Растяни их на бóльший участок черепа.');
+    if(outsideArc(Math.atan2(R.T.y-f.c.y,R.T.x-f.c.x),sp)*DEG>25)R.warn.push('Касательная касается подобранной дуги вне размеченного участка. Добавь точки контура ближе к месту касания (жёлтый ромб).');
+  }else{
+    if(!S.man)return R;
+    const w=sub(S.man,B);
+    R.aop=angle3(A,B,S.man);R.T=S.man;R.sweep={a1,s:crs(v,w)>=0?1:-1,a:R.aop/DEG};
+  }
+  if(R.aop<80||R.aop>200)R.warn.push('Необычное значение угла — проверь, что точки 1 и 2 не перепутаны и касательная идёт к ведущей части черепа.');
+  return R;
+}
+
+/* ---------- проективное выпрямление ---------- */
+function solve(A,b){
+  const n=b.length,M=A.map((r,i)=>[...r,b[i]]);
+  for(let c=0;c<n;c++){
+    let p=c;for(let r=c+1;r<n;r++)if(Math.abs(M[r][c])>Math.abs(M[p][c]))p=r;
+    if(Math.abs(M[p][c])<1e-12)return null;
+    [M[c],M[p]]=[M[p],M[c]];
+    for(let r=0;r<n;r++){if(r===c)continue;const f=M[r][c]/M[c][c];for(let j=c;j<=n;j++)M[r][j]-=f*M[c][j];}
+  }
+  return M.map((r,i)=>r[n]/r[i]);
+}
+function homography(src,dst){
+  const A=[],b=[];
+  for(let i=0;i<4;i++){const {x,y}=src[i],u=dst[i].x,v=dst[i].y;
+    A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v);}
+  const h=solve(A,b);return h?[...h,1]:null;
+}
+function hApply(H,p){const w=H[6]*p.x+H[7]*p.y+H[8];return{x:(H[0]*p.x+H[1]*p.y+H[2])/w,y:(H[3]*p.x+H[4]*p.y+H[5])/w};}
+function hInv(m){
+  const [a,b,c,d,e,f,g,h,i]=m,A=e*i-f*h,B=-(d*i-f*g),C=d*h-e*g,det=a*A+b*B+c*C;
+  return[A/det,-(b*i-c*h)/det,(b*f-c*e)/det,B/det,(a*i-c*g)/det,-(a*f-c*d)/det,C/det,-(a*h-b*g)/det,(a*e-b*d)/det];
+}
+// Углы → TL, TR, BR, BL
+function orderQuad(P){
+  const c={x:P.reduce((s,p)=>s+p.x,0)/4,y:P.reduce((s,p)=>s+p.y,0)/4};
+  const q=[...P].sort((p,r)=>Math.atan2(p.y-c.y,p.x-c.x)-Math.atan2(r.y-c.y,r.x-c.x));
+  let tl=0;q.forEach((p,i)=>{if(p.x+p.y<q[tl].x+q[tl].y)tl=i;});
+  return q.slice(tl).concat(q.slice(0,tl));
+}
+// Истинное соотношение сторон прямоугольника по его перспективной проекции
+// (Zhang & He, «Whiteboard scanning and image enhancement», 2007): главная точка — центр фото, пиксели квадратные
+function estAspect(q,W,H){
+  const u0=W/2,v0=H/2,h=p=>[p.x,p.y,1];
+  const side=(a,b)=>len(sub(a,b)),fb=(side(q[0],q[1])+side(q[3],q[2]))/(side(q[0],q[3])+side(q[1],q[2]));
+  const m1=h(q[0]),m2=h(q[1]),m3=h(q[3]),m4=h(q[2]);
+  const cr=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],dt=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  const k2=dt(cr(m1,m4),m3)/dt(cr(m2,m4),m3),k3=dt(cr(m1,m4),m2)/dt(cr(m3,m4),m2);
+  const n2=m2.map((v,i)=>k2*v-m1[i]),n3=m3.map((v,i)=>k3*v-m1[i]),den=n2[2]*n3[2];
+  if(!isFinite(den)||Math.abs(den)<1e-12)return{r:fb,how:'sides'};
+  const f2=-((n2[0]*n3[0]-(n2[0]*n3[2]+n2[2]*n3[0])*u0+den*u0*u0)+(n2[1]*n3[1]-(n2[1]*n3[2]+n2[2]*n3[1])*v0+den*v0*v0))/den;
+  const diag=Math.hypot(W,H);
+  // Почти фронтальный снимок: фокусное не определяется — тогда достаточно длин сторон
+  if(!(f2>0)||Math.sqrt(f2)<0.3*diag||Math.sqrt(f2)>6*diag)return{r:fb,how:'sides'};
+  const qq=n=>{const x=n[0]-u0*n[2],y=n[1]-v0*n[2];return(x*x+y*y)/f2+n[2]*n[2];};
+  const r=Math.sqrt(qq(n2)/qq(n3));
+  return isFinite(r)&&r>0.3&&r<3.5?{r,how:'persp'}:{r:fb,how:'sides'};
+}
+function warp(src,M,W,H){
+  const sw=src.width,sh=src.height,sd=src.getContext('2d').getImageData(0,0,sw,sh).data;
+  const out=document.createElement('canvas');out.width=W;out.height=H;
+  const og=out.getContext('2d'),id=og.createImageData(W,H),od=id.data;
+  for(let y=0;y<H;y++){const Y=y+.5;
+    for(let x=0;x<W;x++){const X=x+.5,w=M[6]*X+M[7]*Y+M[8];
+      const sx=Math.max(0,Math.min(sw-1,(M[0]*X+M[1]*Y+M[2])/w-.5)),sy=Math.max(0,Math.min(sh-1,(M[3]*X+M[4]*Y+M[5])/w-.5));
+      const x0=sx|0,y0=sy|0,x1=Math.min(x0+1,sw-1),y1=Math.min(y0+1,sh-1),fx=sx-x0,fy=sy-y0;
+      const i00=(y0*sw+x0)*4,i10=(y0*sw+x1)*4,i01=(y1*sw+x0)*4,i11=(y1*sw+x1)*4,o=(y*W+x)*4;
+      for(let c=0;c<3;c++){const t=sd[i00+c]+(sd[i10+c]-sd[i00+c])*fx,b=sd[i01+c]+(sd[i11+c]-sd[i01+c])*fx;od[o+c]=t+(b-t)*fy;}
+      od[o+3]=255;
+    }}
+  og.putImageData(id,0,0);return out;
+}
 
 /* ---------- пример: синтетический трансперинеальный кадр ---------- */
-function tangentMax(B,O,r,A){
-  const dx=O.x-B.x,dy=O.y-B.y,d=Math.hypot(dx,dy),base=Math.atan2(B.y-O.y,B.x-O.x),t=Math.acos(r/d);
-  let best=null,bestA=-1;
-  for(const s of [1,-1]){const a=base+s*t,T={x:O.x+r*Math.cos(a),y:O.y+r*Math.sin(a)};const g=angle(A,B,T);if(g>bestA){bestA=g;best=T;}}
-  return best;
-}
 function makeSample(){
   const W=900,H=760,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
   g.fillStyle='#000';g.fillRect(0,0,W,H);
   const id=g.createImageData(W,H),d=id.data,ax=W/2,ay=-260;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const r=Math.hypot(x-ax,y-ay),a=Math.atan2(x-ax,y-ay);
-    if(r>300&&r<1080&&Math.abs(a)<0.62){const v=18+Math.random()*Math.random()*70;const i=(y*W+x)*4;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;}
+    const r=Math.hypot(x-ax,y-ay),a=Math.atan2(x-ax,y-ay),i=(y*W+x)*4;d[i+3]=255;
+    if(r>300&&r<1080&&Math.abs(a)<0.62){const v=18+Math.random()*Math.random()*70;d[i]=d[i+1]=d[i+2]=v;}
   }
   g.putImageData(id,0,0);
   const A={x:180,y:262},B={x:420,y:332};
-  // симфиз
   g.save();g.translate((A.x+B.x)/2,(A.y+B.y)/2);g.rotate(Math.atan2(B.y-A.y,B.x-A.x));
   g.shadowColor='rgba(255,255,255,.8)';g.shadowBlur=22;g.fillStyle='rgba(225,225,225,.78)';
-  g.beginPath();g.ellipse(0,0,Math.hypot(B.x-A.x,B.y-A.y)/2+6,20,0,0,Math.PI*2);g.fill();g.restore();
-  // череп
-  const ba=Math.atan2(A.y-B.y,A.x-B.x),dir=ba-100*Math.PI/180,dist=380;
-  const O={x:B.x+dist*Math.cos(dir),y:B.y+dist*Math.sin(dir)},R=dist*Math.sin(25*Math.PI/180);
+  g.beginPath();g.ellipse(0,0,len(sub(B,A))/2+6,20,0,0,TAU);g.fill();g.restore();
+  const ba=Math.atan2(A.y-B.y,A.x-B.x),dir=ba-100/DEG,dist=380;
+  const O={x:B.x+dist*Math.cos(dir),y:B.y+dist*Math.sin(dir)},R=dist*Math.sin(25/DEG);
   g.save();g.shadowColor='rgba(255,255,255,.7)';g.shadowBlur=18;g.strokeStyle='rgba(235,235,235,.85)';g.lineWidth=13;
-  g.beginPath();g.arc(O.x,O.y,R,0,Math.PI*2);g.stroke();
+  g.beginPath();g.arc(O.x,O.y,R,0,TAU);g.stroke();
   g.lineWidth=3;g.strokeStyle='rgba(200,200,200,.45)';g.beginPath();g.moveTo(O.x-R*.15,O.y-R*.85);g.lineTo(O.x+R*.1,O.y+R*.85);g.stroke();g.restore();
-  // текстура
   g.fillStyle='rgba(0,0,0,.4)';for(let i=0;i<9000;i++)g.fillRect(Math.random()*W,Math.random()*H,1+Math.random()*2,1+Math.random()*2);
-  // шкала глубины
   g.fillStyle='#ddd';g.font='16px monospace';for(let k=0;k<=7;k++){g.fillRect(W-28,40+k*95,12,2);g.fillText(String(k*2),W-58,46+k*95);}
   g.fillText('cm',W-58,24);
-  const C=tangentMax(B,O,R+6,A);
-  return {canvas:c,pts:[A,B,C]};
+  // Точка касания и точки контура на наружном крае кости
+  const Ro=R+6,dd=len(sub(O,B)),base=Math.atan2(B.y-O.y,B.x-O.x),t=Math.acos(Ro/dd);
+  let best=null,bestA=-1,tA=0;
+  for(const s of[1,-1]){const a=base+s*t,T={x:O.x+Ro*Math.cos(a),y:O.y+Ro*Math.sin(a)},ga=angle3(A,B,T);if(ga>bestA){bestA=ga;best=T;tA=a;}}
+  const cont=[-38,-16,8,30].map(k=>({x:O.x+Ro*Math.cos(tA+k/DEG),y:O.y+Ro*Math.sin(tA+k/DEG)}));
+  return{canvas:c,A,B,C:best,cont};
 }
 
-/* ---------- геометрия ---------- */
-function angle(A,B,C){
-  const v1x=A.x-B.x,v1y=A.y-B.y,v2x=C.x-B.x,v2y=C.y-B.y;
-  const c=(v1x*v2x+v1y*v2y)/(Math.hypot(v1x,v1y)*Math.hypot(v2x,v2y));
-  return Math.acos(Math.max(-1,Math.min(1,c)))*180/Math.PI;
+/* ---------- изображение и коррекция ---------- */
+function buildView(){
+  const {b,c,inv}=S.adj;
+  if(!b&&!c&&!inv){S.view=S.base;return;}
+  const W=S.base.width,H=S.base.height;
+  if(!S.view||S.view===S.base||S.view.width!==W||S.view.height!==H){S.view=document.createElement('canvas');S.view.width=W;S.view.height=H;}
+  const g=S.view.getContext('2d');g.drawImage(S.base,0,0);
+  const cf=1+c/100,lut=new Uint8ClampedArray(256);
+  for(let i=0;i<256;i++){const v=(i-128)*cf+128+b*1.28;lut[i]=inv?255-v:v;}
+  const id=g.getImageData(0,0,W,H),d=id.data;
+  for(let i=0;i<d.length;i+=4){d[i]=lut[d[i]];d[i+1]=lut[d[i+1]];d[i+2]=lut[d[i+2]];}
+  g.putImageData(id,0,0);
 }
-function scale(){const r=cv.getBoundingClientRect();return r.width?cv.width/r.width:1;}
-function toC(e){const r=cv.getBoundingClientRect();return{x:Math.max(0,Math.min(cv.width,(e.clientX-r.left)*cv.width/r.width)),y:Math.max(0,Math.min(cv.height,(e.clientY-r.top)*cv.height/r.height))};}
+let adjRaf=0;
+function adjChanged(){if(adjRaf)return;adjRaf=requestAnimationFrame(()=>{adjRaf=0;buildView();render();});}
+function syncAdjUI(){
+  $('bri').value=S.adj.b;$('briV').textContent=Math.round(S.adj.b);
+  $('con').value=S.adj.c;$('conV').textContent=Math.round(S.adj.c);
+  $('inv').setAttribute('aria-pressed',String(S.adj.inv));
+}
+function autoContrast(){
+  const W=S.base.width,H=S.base.height,d=S.base.getContext('2d').getImageData(0,0,W,H).data,hist=new Uint32Array(256);
+  let n=0;
+  for(let i=0;i<d.length;i+=16){const l=(d[i]*3+d[i+1]*6+d[i+2])/10|0;if(l>8){hist[l]++;n++;}}
+  if(n<100)return;
+  const pct=q=>{let s=0;for(let i=0;i<256;i++){s+=hist[i];if(s>=n*q)return i;}return 255;};
+  const lo=pct(0.02),hi=Math.max(lo+10,pct(0.995)),cf=Math.max(0.5,Math.min(2.5,255/(hi-lo)));
+  S.adj.c=Math.round((cf-1)*100);S.adj.b=Math.max(-100,Math.min(100,Math.round(-((lo+hi)/2-128)*cf/1.28)));
+  syncAdjUI();adjChanged();
+}
+
+function setImage(c,sample){
+  Object.assign(S,{orig:c,base:c,Hcum:null,sym:[],cont:[],man:null,rect:null,sel:null,z:1,tx:0,ty:0,cssW:0,adj:{b:0,c:0,inv:false}});
+  undoStack=[];badge.hidden=!sample;syncAdjUI();buildView();layout();
+}
+function loadFile(f){
+  if(!f)return;
+  if(f.type&&!f.type.startsWith('image/'))return toast('Это не изображение.','warn');
+  const url=URL.createObjectURL(f),im=new Image();
+  im.onload=()=>{
+    const k0=Math.min(1,MAXSIDE/Math.max(im.naturalWidth,im.naturalHeight)),c=document.createElement('canvas');
+    c.width=Math.round(im.naturalWidth*k0);c.height=Math.round(im.naturalHeight*k0);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
+    setImage(c,false);toast('Фото загружено. Если снято под углом — «Выпрямить экран».');
+  };
+  im.onerror=()=>{URL.revokeObjectURL(url);toast('Не удалось открыть файл. Попробуй JPEG или PNG.','warn');};
+  im.src=url;
+}
+
+/* ---------- вид: размер, масштаб, сдвиг ---------- */
+function scaleK(){return S.cssW/S.base.width*S.z;}
+function layout(){
+  if(!S.base)return;
+  const W=S.base.width,H=S.base.height,avail=stage.clientWidth;
+  const maxH=Math.max(260,innerHeight*(innerWidth<900?0.62:0.82));
+  const w=Math.max(50,Math.min(avail,maxH*W/H)),h=w*H/W,dpr=Math.min(3,devicePixelRatio||1);
+  if(S.cssW){const r=w/S.cssW;S.tx*=r;S.ty*=r;}
+  S.cssW=w;S.cssH=h;S.dpr=dpr;
+  cv.style.width=w+'px';cv.style.height=h+'px';
+  cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);
+  clampView();render();
+}
+function clampView(){
+  const kk=scaleK();
+  S.tx=Math.min(0,Math.max(S.cssW-S.base.width*kk,S.tx));
+  S.ty=Math.min(0,Math.max(S.cssH-S.base.height*kk,S.ty));
+}
+function zoomAt(f,cx,cy){
+  if(!S.base)return;
+  if(cx==null){cx=S.cssW/2;cy=S.cssH/2;}
+  const k0=scaleK(),ix=(cx-S.tx)/k0,iy=(cy-S.ty)/k0;
+  S.z=Math.max(1,Math.min(MAXZ,S.z*f));const kk=scaleK();
+  S.tx=cx-ix*kk;S.ty=cy-iy*kk;clampView();render();
+}
+function toImg(e){const r=cv.getBoundingClientRect(),kk=scaleK();return{x:(e.clientX-r.left-S.tx)/kk,y:(e.clientY-r.top-S.ty)/kk};}
+function clampImg(p){return{x:Math.max(0,Math.min(S.base.width,p.x)),y:Math.max(0,Math.min(S.base.height,p.y))};}
 
 /* ---------- отрисовка ---------- */
-function line(p,q,col,w,dash){ctx.save();ctx.strokeStyle=col;ctx.lineWidth=w;ctx.setLineDash(dash||[]);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.restore();}
-function render(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  if(src)ctx.drawImage(src,0,0,cv.width,cv.height);
-  const s=scale(),w=2.5*s,CY='#4fd8ff',AM='#ffb627';
-  const [A,B,C]=pts;
-  if(A&&B){
-    line(A,B,CY,w);
-    const ex={x:A.x+(A.x-B.x)*.25,y:A.y+(A.y-B.y)*.25};line(A,ex,CY,w*.7,[8*s,6*s]);
+function seg(g,p,q,col,w,dash){g.save();g.strokeStyle=col;g.lineWidth=w;g.setLineDash(dash||[]);g.lineCap='round';g.beginPath();g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);g.stroke();g.restore();}
+function marker(g,p,u,col,label,sel){
+  g.save();
+  if(sel){g.fillStyle='rgba(255,255,255,.18)';g.beginPath();g.arc(p.x,p.y,15*u,0,TAU);g.fill();}
+  g.lineWidth=2.5*u;g.strokeStyle='#000';g.beginPath();g.arc(p.x,p.y,9*u,0,TAU);g.stroke();
+  g.lineWidth=2*u;g.strokeStyle=sel?'#fff':col;g.stroke();
+  g.fillStyle=col;g.beginPath();g.arc(p.x,p.y,2*u,0,TAU);g.fill();
+  if(label){
+    g.font=`600 ${15*u}px "IBM Plex Mono",monospace`;g.textBaseline='middle';
+    const lx=p.x+13*u,ly=p.y-13*u,tw=g.measureText(label).width;
+    g.fillStyle='rgba(0,0,0,.8)';g.fillRect(lx-3*u,ly-10*u,tw+6*u,20*u);g.fillStyle=col;g.fillText(label,lx,ly+1*u);
   }
-  if(B&&C){
-    const ex={x:C.x+(C.x-B.x)*.5,y:C.y+(C.y-B.y)*.5};line(B,C,AM,w);line(C,ex,AM,w*.7,[8*s,6*s]);
-    const a1=Math.atan2(A.y-B.y,A.x-B.x),a2=Math.atan2(C.y-B.y,C.x-B.x);
-    let df=a2-a1;while(df>Math.PI)df-=2*Math.PI;while(df<-Math.PI)df+=2*Math.PI;
-    const r=Math.min(Math.hypot(A.x-B.x,A.y-B.y),Math.hypot(C.x-B.x,C.y-B.y))*.35;
-    ctx.save();ctx.strokeStyle='#fff';ctx.lineWidth=w*.8;ctx.beginPath();ctx.arc(B.x,B.y,r,a1,a2,df<0);ctx.stroke();
-    const mid=a1+df/2,lx=B.x+(r+26*s)*Math.cos(mid),ly=B.y+(r+26*s)*Math.sin(mid);
-    const txt=angle(A,B,C).toFixed(0)+'°';ctx.font=`600 ${18*s}px "IBM Plex Mono",monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-    const tw=ctx.measureText(txt).width;ctx.fillStyle='rgba(0,0,0,.8)';ctx.fillRect(lx-tw/2-6*s,ly-13*s,tw+12*s,26*s);ctx.fillStyle='#fff';ctx.fillText(txt,lx,ly);ctx.restore();
-  }
-  pts.forEach((p,i)=>{
-    ctx.save();const col=i===2?AM:CY;
-    ctx.lineWidth=2.5*s;ctx.strokeStyle='#000';ctx.beginPath();ctx.arc(p.x,p.y,9*s,0,Math.PI*2);ctx.stroke();
-    ctx.lineWidth=2*s;ctx.strokeStyle=col;ctx.stroke();
-    ctx.fillStyle=col;ctx.beginPath();ctx.arc(p.x,p.y,2*s,0,Math.PI*2);ctx.fill();
-    ctx.font=`600 ${15*s}px "IBM Plex Mono",monospace`;ctx.textBaseline='middle';
-    const lx=p.x+13*s,ly=p.y-13*s;ctx.fillStyle='rgba(0,0,0,.8)';ctx.fillRect(lx-3*s,ly-10*s,18*s,20*s);ctx.fillStyle=col;ctx.fillText(String(i+1),lx+1*s,ly+1*s);
-    ctx.restore();
-  });
-  update();
+  g.restore();
 }
-function update(){
-  const n=pts.length;
-  for(let i=0;i<3;i++){const c=document.getElementById('c'+i);c.className='chip'+(i<n?' done':'')+(i===n?' now':'');}
-  hintEl.textContent=HINTS[Math.min(n,3)];
-  if(n===3){
-    const a=angle(pts[0],pts[1],pts[2]);degEl.innerHTML=a.toFixed(0)+'<small>°</small>';verdict.hidden=false;
-    if(a>=120){verdict.className='good';verdict.innerHTML='<b>AoP ≥ 120°</b>Во II периоде ассоциирован с высокой вероятностью спонтанных вагинальных родов (Kalache 2009; ISUOG 2018).';}
-    else{verdict.className='warn';verdict.innerHTML='<b>AoP &lt; 120°</b>Вероятность спонтанных родов ниже. Оценивай в динамике и вместе с клиникой.';}
-  }else{degEl.textContent='—';verdict.hidden=true;}
+function smallDot(g,p,u,col,sel){
+  g.save();g.lineWidth=2*u;g.strokeStyle='#000';g.fillStyle=col;
+  g.beginPath();g.arc(p.x,p.y,4.5*u,0,TAU);g.fill();g.stroke();
+  if(sel){g.strokeStyle='#fff';g.lineWidth=2*u;g.beginPath();g.arc(p.x,p.y,10*u,0,TAU);g.stroke();}
+  g.restore();
+}
+function drawOverlay(g,u,M,live){
+  const w=2.5*u;
+  if(S.rect&&live){
+    const q=S.rect;
+    if(q.length>1){g.save();g.strokeStyle=MG;g.lineWidth=2*u;g.setLineDash([8*u,6*u]);g.beginPath();
+      const o=q.length===4?orderQuad(q):q;o.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));if(q.length===4)g.closePath();g.stroke();g.restore();}
+    q.forEach((p,i)=>marker(g,p,u,MG,String(i+1),isSel('rect',i)));
+    return;
+  }
+  const [A,B]=S.sym;
+  if(A&&B){seg(g,A,B,CY,w);seg(g,A,{x:A.x+(A.x-B.x)*.3,y:A.y+(A.y-B.y)*.3},CY,w*.7,[8*u,6*u]);}
+  if(S.mode==='contour'&&M.circle){
+    const {c,r}=M.circle;g.save();
+    g.strokeStyle='rgba(255,182,39,.35)';g.lineWidth=1.5*u;g.setLineDash([4*u,5*u]);g.beginPath();g.arc(c.x,c.y,r,0,TAU);g.stroke();
+    g.setLineDash([]);g.strokeStyle='rgba(255,182,39,.85)';g.lineWidth=2*u;g.beginPath();g.arc(c.x,c.y,r,M.span.start,M.span.start+M.span.w);g.stroke();
+    g.restore();
+  }
+  if(B&&M.aop!=null){
+    const T=M.T;seg(g,B,T,AM,w);seg(g,T,{x:T.x+(T.x-B.x)*.4,y:T.y+(T.y-B.y)*.4},AM,w*.7,[8*u,6*u]);
+    const {a1,s,a}=M.sweep,r=Math.min(len(sub(A,B)),len(sub(T,B)))*.35;
+    g.save();g.strokeStyle='#fff';g.lineWidth=w*.8;g.beginPath();g.arc(B.x,B.y,r,a1,a1+s*a,s<0);g.stroke();
+    const mid=a1+s*a/2,lx=B.x+(r+26*u)*Math.cos(mid),ly=B.y+(r+26*u)*Math.sin(mid),txt=Math.round(M.aop)+'°';
+    g.font=`600 ${18*u}px "IBM Plex Mono",monospace`;g.textAlign='center';g.textBaseline='middle';
+    const tw=g.measureText(txt).width;g.fillStyle='rgba(0,0,0,.8)';g.fillRect(lx-tw/2-6*u,ly-13*u,tw+12*u,26*u);g.fillStyle='#fff';g.fillText(txt,lx,ly);
+    g.restore();
+    if(S.mode==='contour'){g.save();g.translate(T.x,T.y);g.rotate(Math.PI/4);g.lineWidth=2*u;g.strokeStyle='#000';g.fillStyle=AM;
+      g.beginPath();g.rect(-5*u,-5*u,10*u,10*u);g.fill();g.stroke();g.restore();}
+  }
+  if(S.mode==='contour')S.cont.forEach((p,i)=>smallDot(g,p,u,AM,live&&isSel('cont',i)));
+  else if(S.man)marker(g,S.man,u,AM,'3',live&&isSel('man',0));
+  S.sym.forEach((p,i)=>marker(g,p,u,CY,String(i+1),live&&isSel('sym',i)));
+}
+function render(){
+  if(!S.base)return;
+  const d=S.dpr,kk=scaleK();
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#000';ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.setTransform(d*kk,0,0,d*kk,d*S.tx,d*S.ty);
+  ctx.imageSmoothingEnabled=kk*d<3;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(S.view,0,0);
+  const M=measure();drawOverlay(ctx,1/kk,M,true);
+  const zl=$('zlvl');zl.hidden=S.z<=1.01;zl.textContent='×'+S.z.toFixed(1);
+  updateUI(M);
 }
 
 /* ---------- лупа ---------- */
 function showLoupe(p,e){
   loupe.hidden=false;
-  const r=cv.getBoundingClientRect(),s=scale(),z=3,half=(65/z)*s;
-  const left=(e.clientX-r.left)<r.width/2&&(e.clientY-r.top)<r.height/2;
-  loupe.style.left=left?'auto':'10px';loupe.style.right=left?'10px':'auto';
-  lctx.fillStyle='#000';lctx.fillRect(0,0,260,260);
-  lctx.imageSmoothingEnabled=false;
-  lctx.drawImage(cv,p.x-half,p.y-half,half*2,half*2,0,0,260,260);
-  lctx.strokeStyle='#fff';lctx.lineWidth=1.5;lctx.beginPath();lctx.moveTo(130,105);lctx.lineTo(130,155);lctx.moveTo(105,130);lctx.lineTo(155,130);lctx.stroke();
+  const r=stage.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top;
+  const right=sx<r.width/2&&sy<r.height/2;
+  loupe.style.left=right?'auto':'10px';loupe.style.right=right?'10px':'auto';
+  const L=loupe.width,half=65/(scaleK()*3),sc=L/(2*half);
+  lctx.setTransform(1,0,0,1,0,0);lctx.fillStyle='#000';lctx.fillRect(0,0,L,L);
+  lctx.imageSmoothingEnabled=sc<4;
+  lctx.setTransform(sc,0,0,sc,-(p.x-half)*sc,-(p.y-half)*sc);lctx.drawImage(S.view,0,0);
+  lctx.setTransform(1,0,0,1,0,0);
+  const col=S.rect?MG:(S.sel&&S.sel.k==='sym'?CY:AM),m=L/2;
+  lctx.lineWidth=3;lctx.strokeStyle='#000';lctx.beginPath();lctx.moveTo(m,m-30);lctx.lineTo(m,m-6);lctx.moveTo(m,m+6);lctx.lineTo(m,m+30);lctx.moveTo(m-30,m);lctx.lineTo(m-6,m);lctx.moveTo(m+6,m);lctx.lineTo(m+30,m);lctx.stroke();
+  lctx.lineWidth=1.5;lctx.strokeStyle=col;lctx.stroke();
 }
+function hideLoupe(){loupe.hidden=true;}
 
-/* ---------- ввод ---------- */
+/* ---------- точки, выбор, отмена ---------- */
+function snap(){return JSON.stringify({sym:S.sym,cont:S.cont,man:S.man,rect:S.rect});}
+function pushUndo(){undoStack.push(snap());if(undoStack.length>200)undoStack.shift();}
+function undo(){
+  const s=undoStack.pop();if(!s)return;const o=JSON.parse(s);
+  S.sym=o.sym;S.cont=o.cont;S.man=o.man;if(S.rect)S.rect=o.rect||[];S.sel=null;render();
+}
+function handles(){
+  if(S.rect)return S.rect.map((p,i)=>({k:'rect',i,p}));
+  const h=S.sym.map((p,i)=>({k:'sym',i,p}));
+  if(S.mode==='contour')S.cont.forEach((p,i)=>h.push({k:'cont',i,p}));else if(S.man)h.push({k:'man',i:0,p:S.man});
+  return h;
+}
+function getH(h){return h.k==='man'?S.man:S[h.k][h.i];}
+function setH(h,p){if(h.k==='man')S.man=p;else S[h.k][h.i]=p;}
+function isSel(k,i){return!!S.sel&&S.sel.k===k&&S.sel.i===i;}
+function selValid(){if(!S.sel)return false;const p=getH(S.sel);return!!p&&(S.sel.k!=='rect'||!!S.rect)&&(S.sel.k!=='cont'||S.mode==='contour')&&(S.sel.k!=='man'||S.mode==='manual');}
+function hitTest(e){
+  const p=toImg(e),rad=22/scaleK();let best=null,bd=rad;
+  for(const h of handles()){const d=len(sub(h.p,p));if(d<bd){bd=d;best=h;}}
+  return best;
+}
+function addPoint(p){
+  if(S.rect){if(S.rect.length<4){pushUndo();S.rect.push(p);S.sel={k:'rect',i:S.rect.length-1};render();}return;}
+  if(S.sym.length<2){pushUndo();S.sym.push(p);S.sel={k:'sym',i:S.sym.length-1};}
+  else if(S.mode==='contour'){
+    if(S.cont.length>=MAXC){toast(`Не больше ${MAXC} точек контура — перетащи или удали лишние.`,'warn');return;}
+    pushUndo();S.cont.push(p);S.sel={k:'cont',i:S.cont.length-1};
+  }
+  else if(!S.man){pushUndo();S.man=p;S.sel={k:'man',i:0};}
+  else return;
+  render();
+}
+function delSel(){
+  if(!selValid())return;pushUndo();const h=S.sel;
+  if(h.k==='man')S.man=null;else S[h.k].splice(h.i,1);
+  S.sel=null;render();
+}
+function nudge(dx,dy){if(!selValid())return;const p=getH(S.sel);setH(S.sel,clampImg({x:p.x+dx,y:p.y+dy}));render();}
+
+/* ---------- ввод: указатель, жесты ---------- */
+const ptrs=new Map();let G=null;
+function pinchState(){const [a,b]=[...ptrs.values()],r=cv.getBoundingClientRect();return{d:Math.hypot(a.x-b.x,a.y-b.y)||1,m:{x:(a.x+b.x)/2-r.left,y:(a.y+b.y)/2-r.top}};}
+function startDrag(h,e,fresh){
+  if(!fresh)pushUndo();
+  const p=getH(h),q=toImg(e);G={t:'drag',h,start:{...p},off:fresh?{x:0,y:0}:sub(p,q),fresh};
+  S.sel={k:h.k,i:h.i};render();showLoupe(p,e);
+}
 cv.addEventListener('pointerdown',e=>{
-  if(!src)return;e.preventDefault();
-  const p=toC(e),hit=28*scale();let idx=-1,best=hit;
-  pts.forEach((q,i)=>{const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<best){best=d;idx=i;}});
-  if(idx<0){if(pts.length>=3)return;pts.push(p);idx=pts.length-1;}
-  drag=idx;try{cv.setPointerCapture(e.pointerId);}catch(_){}
-  render();showLoupe(pts[drag],e);
+  if(!S.base)return;e.preventDefault();
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){
+    if(G&&G.t==='drag'){undo();hideLoupe();}
+    const ps=pinchState();G={t:'pinch',d0:ps.d,m0:ps.m,z0:S.z,tx0:S.tx,ty0:S.ty};return;
+  }
+  if(ptrs.size>2)return;
+  const h=hitTest(e);
+  if(h)startDrag(h,e,false);
+  else G={t:'tap',x0:e.clientX,y0:e.clientY,tx0:S.tx,ty0:S.ty};
 });
-cv.addEventListener('pointermove',e=>{if(drag<0)return;pts[drag]=toC(e);render();showLoupe(pts[drag],e);});
-function end(){drag=-1;loupe.hidden=true;}
-cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
-
-function loadFile(f){
-  if(!f||!f.type.startsWith('image/'))return;
-  const rd=new FileReader();
-  rd.onload=()=>{const im=new Image();im.onload=()=>{
-    const k=Math.min(1,1600/Math.max(im.naturalWidth,im.naturalHeight));
-    cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);
-    src=im;pts=[];badge.hidden=true;render();
-  };im.src=rd.result;};
-  rd.readAsDataURL(f);
+cv.addEventListener('pointermove',e=>{
+  if(!S.base)return;
+  if(!ptrs.has(e.pointerId)){if(e.pointerType==='mouse')cv.style.cursor=hitTest(e)?'grab':(S.z>1?'move':'crosshair');return;}
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(!G)return;
+  if(G.t==='pinch'&&ptrs.size>=2){
+    const ps=pinchState(),k0=S.cssW/S.base.width*G.z0,ix=(G.m0.x-G.tx0)/k0,iy=(G.m0.y-G.ty0)/k0;
+    S.z=Math.max(1,Math.min(MAXZ,G.z0*ps.d/G.d0));const kk=scaleK();
+    S.tx=ps.m.x-ix*kk;S.ty=ps.m.y-iy*kk;clampView();render();
+  }else if(G.t==='drag'){
+    const q=toImg(e),p=clampImg({x:q.x+G.off.x,y:q.y+G.off.y});setH(G.h,p);render();showLoupe(p,e);
+  }else if(G.t==='tap'||G.t==='pan'){
+    const dx=e.clientX-G.x0,dy=e.clientY-G.y0;
+    if(G.t==='tap'&&Math.hypot(dx,dy)>8){
+      if(S.z>1.01)G.t='pan';
+      else{
+        // Без увеличения «нажать и тянуть» ставит новую точку и сразу двигает её с лупой
+        const before=snap();addPoint(clampImg(toImg(e)));
+        if(snap()!==before&&S.sel){startDrag({k:S.sel.k,i:S.sel.i},e,true);return;}
+        G.t='pan';
+      }
+    }
+    if(G.t==='pan'){S.tx=G.tx0+dx;S.ty=G.ty0+dy;clampView();render();}
+  }
+});
+function ptrEnd(e){
+  if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);
+  if(G&&G.t==='tap'&&e.type==='pointerup'){
+    const p=toImg(e);if(p.x>=0&&p.y>=0&&p.x<=S.base.width&&p.y<=S.base.height)addPoint(p);
+  }
+  if(G&&G.t==='drag'){
+    hideLoupe();
+    if(!G.fresh&&len(sub(getH(G.h),G.start))<1e-6)undoStack.pop();
+    render();
+  }
+  if(ptrs.size===0)G=null;else if(G&&G.t==='pinch')G={t:'none'};
 }
-document.getElementById('file').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value='';});
+cv.addEventListener('pointerup',ptrEnd);cv.addEventListener('pointercancel',ptrEnd);
+cv.addEventListener('wheel',e=>{
+  if(!S.base||!(e.ctrlKey||e.metaKey||S.z>1.01))return;
+  e.preventDefault();const r=cv.getBoundingClientRect();
+  zoomAt(Math.exp(-Math.max(-100,Math.min(100,e.deltaY))*(e.ctrlKey?0.006:0.002)),e.clientX-r.left,e.clientY-r.top);
+},{passive:false});
+cv.addEventListener('dblclick',e=>{if(S.z>1.01){S.z=1;S.tx=S.ty=0;render();}else{const r=cv.getBoundingClientRect();zoomAt(3,e.clientX-r.left,e.clientY-r.top);}});
+
+/* ---------- интерфейс ---------- */
+const HINT_RECT=n=>`Выпрямление: отметь 4 угла прямоугольника на экране УЗИ — рамку изображения или края монитора. Отмечено ${n} из 4. Точки можно перетаскивать.`;
+function hint(){
+  if(S.rect)return HINT_RECT(S.rect.length);
+  const n=S.sym.length;
+  if(n===0)return'Точка 1 — верхний (краниальный) конец длинной оси симфиза.';
+  if(n===1)return'Точка 2 — нижний (каудальный) край симфиза. Это вершина угла.';
+  if(S.mode==='contour'){
+    const c=S.cont.length;
+    if(c<3)return`Отметь наружный край кости черепа в районе, куда подойдёт касательная из точки 2: ещё ${3-c} ${c===2?'точку':'точки'} минимум, лучше 4–6.`;
+    return'Касательная построена по контуру. Добавь точки или перетащи их, чтобы дуга легла точно по кости.';
+  }
+  return S.man?'Готово. Перетащи любую точку, чтобы уточнить положение.':'Точка 3 — точка касания на ведущем контуре черепа.';
+}
+const SELNAMES={sym:i=>`Точка ${i+1} — ${i?'нижний':'верхний'} край симфиза`,cont:i=>`Контур черепа, точка ${i+1}`,man:()=>'Точка 3 — касание',rect:i=>`Угол экрана ${i+1}`};
+function updateUI(M){
+  const n=S.sym.length,third=S.mode==='contour'?S.cont.length>=3:!!S.man;
+  const st=[n>0,n>1,third],now=st.indexOf(false);
+  for(let i=0;i<3;i++)$('c'+i).className='chip'+(st[i]?' done':'')+(i===now&&!S.rect?' now':'');
+  $('hint').textContent=hint();
+  $('mContour').setAttribute('aria-pressed',String(S.mode==='contour'));
+  $('mManual').setAttribute('aria-pressed',String(S.mode==='manual'));
+  $('p1').setAttribute('aria-pressed',String(S.phase==='1'));
+  $('p2').setAttribute('aria-pressed',String(S.phase==='2'));
+  const sv=selValid();
+  $('selname').textContent=sv?SELNAMES[S.sel.k](S.sel.i)+' · стрелки сдвигают на 1 px':'Точка не выбрана — тапни по точке, чтобы уточнить её стрелками';
+  document.querySelectorAll('#nudge button').forEach(b=>b.disabled=!sv);
+  $('undo').disabled=!undoStack.length;
+  $('rectGo').hidden=!!S.rect;$('rectbox').hidden=!S.rect;$('rectUndo').hidden=!S.Hcum||!!S.rect;
+  $('rectApply').disabled=!S.rect||S.rect.length<4;
+
+  const has=M.aop!=null,deg=$('deg'),ver=$('verdict');
+  ['save','copy','png'].forEach(id=>$(id).disabled=!has);
+  const thr=S.phase==='1'?110:120;
+  if(has){
+    deg.innerHTML=Math.round(M.aop)+'<small>°</small>';
+    $('gaugebox').hidden=false;
+    const pos=v=>Math.max(0,Math.min(100,(v-80)));
+    $('gauge').style.background=`linear-gradient(90deg,#6b3a24 0,#c0643c ${pos(thr)}%,#1f7a4f ${pos(thr)}%,#3ee08f 100%)`;
+    $('gthr').style.left=pos(thr)+'%';$('gmark').style.left=pos(M.aop)+'%';
+    ver.hidden=false;const ok=M.aop>=thr;ver.className=ok?'good':'warn';
+    if(S.phase==='1')ver.innerHTML=ok
+      ?'<b>AoP ≥ 110° · I период</b>При затянувшемся I периоде ассоциирован с более высокой вероятностью вагинальных родов (Torkildsen 2011; ISUOG 2018).'
+      :'<b>AoP &lt; 110° · I период</b>При затянувшемся I периоде ассоциирован с более высокой вероятностью кесарева сечения. Оценивай в динамике и вместе с клиникой.';
+    else ver.innerHTML=ok
+      ?'<b>AoP ≥ 120° · II период</b>Ассоциирован с высокой вероятностью спонтанных вагинальных родов (Kalache 2009; ISUOG 2018).'
+      :'<b>AoP &lt; 120° · II период</b>Вероятность спонтанных родов ниже. Оценивай в динамике и вместе с клиникой.';
+  }else{deg.textContent='—';ver.hidden=true;$('gaugebox').hidden=true;}
+  const wl=$('warns');wl.innerHTML='';
+  const add=(t,cls)=>{const li=document.createElement('li');li.textContent=t;if(cls)li.className=cls;wl.appendChild(li);};
+  if(M.err)add(M.err,'err');
+  if(!S.rect)M.warn.forEach(t=>add(t));
+}
+let toastT=0;
+function toast(t,kind){
+  toastEl.style.color=kind==='warn'?'var(--warn)':kind==='plain'?'var(--fg)':'var(--good)';
+  toastEl.textContent=t;clearTimeout(toastT);toastT=setTimeout(()=>{toastEl.textContent='';},6000);
+}
+
+/* ---------- результат: текст, PNG ---------- */
+const pad=n=>String(n).padStart(2,'0');
+function fmtDate(d){return`${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;}
+function details(){
+  const p=[S.phase==='1'?'I период':'II период',S.mode==='contour'?`касательная по контуру черепа (${S.cont.length} точ.)`:'касательная вручную'];
+  if(S.Hcum)p.push('перспектива экрана исправлена');
+  return p.join('; ');
+}
+function summary(M){return`AoP ${Math.round(M.aop)}° (${details()}; трансперинеальное УЗИ, разметка по фото экрана) — ${fmtDate(new Date())}`;}
+function copyText(t){
+  const ok=()=>toast('Скопировано: '+t),fail=()=>toast(t,'plain');
+  try{navigator.clipboard.writeText(t).then(ok,fail);}catch(_){fail();}
+}
+function exportPNG(){
+  const M=measure();if(M.aop==null)return;
+  const W=S.base.width,H=S.base.height,u=Math.max(W,H)/900,strip=Math.round(70*u);
+  const c=document.createElement('canvas');c.width=W;c.height=H+strip;const g=c.getContext('2d');
+  g.drawImage(S.view,0,0);drawOverlay(g,u,M,false);
+  g.fillStyle='#0a0d10';g.fillRect(0,H,W,strip);
+  g.textBaseline='middle';g.fillStyle='#fff';g.font=`600 ${28*u}px "IBM Plex Mono",monospace`;
+  const big=`AoP ${Math.round(M.aop)}°`,bw=g.measureText(big).width;g.fillText(big,16*u,H+strip/2);
+  const x0=16*u+bw+20*u,avail=W-x0-16*u,l1=details(),l2=fmtDate(new Date())+' · ориентир, не диагноз';
+  let fs=14*u;g.font=`${fs}px "IBM Plex Sans",sans-serif`;
+  const mw=Math.max(g.measureText(l1).width,g.measureText(l2).width);
+  if(mw>avail){fs*=avail/mw;g.font=`${fs}px "IBM Plex Sans",sans-serif`;}
+  g.fillStyle='#cfd8e0';g.fillText(l1,x0,H+strip/2-fs*.7);g.fillText(l2,x0,H+strip/2+fs*.8);
+  const d=new Date(),name=`AoP_${Math.round(M.aop)}_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.png`;
+  c.toBlob(blob=>{
+    if(!blob)return toast('Не удалось сохранить изображение.','warn');
+    const file=new File([blob],name,{type:'image/png'});
+    if(navigator.canShare&&matchMedia('(pointer:coarse)').matches&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:big}).catch(()=>{});return;
+    }
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);toast('Сохранено: '+name);
+  },'image/png');
+}
+
+/* ---------- журнал ---------- */
+const LOGK='aop-log-v1';
+let log=store.get(LOGK,[]);if(!Array.isArray(log))log=[];
+function logLine(e,prev){
+  const d=new Date(e.t),today=new Date().toDateString()===d.toDateString();
+  const t=today?`${pad(d.getHours())}:${pad(d.getMinutes())}`:fmtDate(d);
+  let delta='';
+  if(prev){const dv=e.aop-prev.aop,dm=Math.round((e.t-prev.t)/60000);delta=`${dv>=0?'+':'−'}${Math.abs(dv).toFixed(0)}° за ${dm<120?dm+' мин':(dm/60).toFixed(1)+' ч'}`;}
+  return{t,delta};
+}
+function renderLog(){
+  const ul=$('log');ul.innerHTML='';
+  $('logCopy').disabled=$('logClear').disabled=!log.length;
+  if(!log.length){const p=document.createElement('li');p.className='empty';p.style.cssText='display:block;background:none;border:0;padding:0';p.textContent='Пока пусто. Сохраняй измерения кнопкой «В журнал», чтобы видеть динамику.';ul.appendChild(p);return;}
+  for(let i=log.length-1;i>=0;i--){
+    const e=log[i],{t,delta}=logLine(e,log[i-1]);
+    const li=document.createElement('li');
+    const v=document.createElement('span');v.className='v';v.textContent=Math.round(e.aop)+'°';
+    v.style.color=e.aop>=(e.ph==='1'?110:120)?'var(--good)':'var(--warn)';
+    const m=document.createElement('span');m.className='m';
+    const tt=document.createElement('span');tt.className='t';tt.textContent=t+' · '+(e.ph==='1'?'I':'II')+' пер.';
+    const dd=document.createElement('span');dd.className='d';dd.textContent=delta;
+    m.append(tt,document.createElement('br'),dd);
+    const x=document.createElement('button');x.className='x';x.type='button';x.textContent='×';x.setAttribute('aria-label','Удалить запись');
+    x.onclick=()=>{log.splice(i,1);store.set(LOGK,log);renderLog();};
+    li.append(v,m,x);
+    if(e.n){const n=document.createElement('span');n.className='n';n.textContent=e.n;li.appendChild(n);}
+    ul.appendChild(li);
+  }
+}
+
+/* ---------- привязка кнопок ---------- */
+$('file').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value='';});
+$('cam').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value='';});
 stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drop');});
 stage.addEventListener('dragleave',()=>stage.classList.remove('drop'));
 stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('drop');loadFile(e.dataTransfer.files[0]);});
-document.addEventListener('paste',e=>{const it=[...(e.clipboardData||{}).items||[]].find(i=>i.type.startsWith('image/'));if(it)loadFile(it.getAsFile());});
-document.getElementById('undo').onclick=()=>{pts.pop();render();};
-document.getElementById('reset').onclick=()=>{pts=[];render();};
-document.getElementById('copy').onclick=()=>{
-  if(pts.length<3){toast.style.color='var(--warn)';toast.textContent='Сначала поставь три точки.';return;}
-  const t=`AoP ${angle(pts[0],pts[1],pts[2]).toFixed(0)}° (трансперинеальное УЗИ, ручная разметка по фото экрана)`;
-  const ok=()=>{toast.style.color='var(--good)';toast.textContent='Скопировано: '+t;};
-  const fail=()=>{toast.style.color='var(--fg)';toast.textContent=t;};
-  try{navigator.clipboard.writeText(t).then(ok,fail);}catch(_){fail();}
+document.addEventListener('paste',e=>{const it=[...((e.clipboardData||{}).items||[])].find(i=>i.type.startsWith('image/'));if(it)loadFile(it.getAsFile());});
+$('undo').onclick=undo;
+$('reset').onclick=()=>{if(S.rect){pushUndo();S.rect=[];}else{pushUndo();S.sym=[];S.cont=[];S.man=null;}S.sel=null;render();};
+$('mContour').onclick=()=>{S.mode='contour';store.set('aop-mode',S.mode);render();};
+$('mManual').onclick=()=>{S.mode='manual';store.set('aop-mode',S.mode);render();};
+$('p1').onclick=()=>{S.phase='1';store.set('aop-phase','1');render();};
+$('p2').onclick=()=>{S.phase='2';store.set('aop-phase','2');render();};
+$('zin').onclick=()=>zoomAt(1.5);$('zout').onclick=()=>zoomAt(1/1.5);
+$('zfit').onclick=()=>{S.z=1;S.tx=S.ty=0;render();};
+$('del').onclick=delSel;
+document.querySelectorAll('#nudge [data-d]').forEach(b=>{
+  let t1=0,t2=0;const [dx,dy]=b.dataset.d.split(',').map(Number);
+  const stop=()=>{clearTimeout(t1);clearInterval(t2);};
+  b.addEventListener('pointerdown',e=>{e.preventDefault();if(!selValid())return;pushUndo();nudge(dx,dy);t1=setTimeout(()=>{t2=setInterval(()=>nudge(dx,dy),50);},350);});
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,stop));
+  b.addEventListener('click',e=>{if(e.detail===0&&selValid()){pushUndo();nudge(dx,dy);}});
+});
+$('bri').oninput=e=>{S.adj.b=+e.target.value;$('briV').textContent=S.adj.b;adjChanged();};
+$('con').oninput=e=>{S.adj.c=+e.target.value;$('conV').textContent=S.adj.c;adjChanged();};
+$('inv').onclick=()=>{S.adj.inv=!S.adj.inv;syncAdjUI();adjChanged();};
+$('auto').onclick=autoContrast;
+$('adjReset').onclick=()=>{S.adj={b:0,c:0,inv:false};syncAdjUI();adjChanged();};
+$('rectGo').onclick=()=>{S.rect=[];S.sel=null;S.z=1;S.tx=S.ty=0;render();};
+$('rectCancel').onclick=()=>{S.rect=null;S.sel=null;while(undoStack.length&&JSON.parse(undoStack[undoStack.length-1]).rect)undoStack.pop();render();};
+$('rectApply').onclick=()=>{
+  if(!S.rect||S.rect.length<4)return;
+  const q=orderQuad(S.rect),Hbo=S.Hcum?hInv(S.Hcum):null,qo=Hbo?q.map(p=>hApply(Hbo,p)):q;
+  const asp=$('aspect').value,est=asp==='auto'?estAspect(qo,S.orig.width,S.orig.height):{r:+asp,how:'preset'},ratio=est.r;
+  const side=(a,b)=>len(sub(a,b));
+  let W=Math.max(side(qo[0],qo[1]),side(qo[3],qo[2])),H=W/ratio;
+  const hh=Math.max(side(qo[0],qo[3]),side(qo[1],qo[2]));if(H<hh){H=hh;W=H*ratio;}
+  const sc=Math.min(1,MAXSIDE/Math.max(W,H));W=Math.max(50,Math.round(W*sc));H=Math.max(50,Math.round(H*sc));
+  const Hn=homography(qo,[{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}]);
+  if(!Hn)return toast('Не получилось: углы стоят слишком близко или на одной линии.','warn');
+  const out=warp(S.orig,hInv(Hn),W,H);
+  const map=p=>hApply(Hn,Hbo?hApply(Hbo,p):p);
+  S.sym=S.sym.map(map);S.cont=S.cont.map(map);if(S.man)S.man=map(S.man);
+  Object.assign(S,{Hcum:Hn,base:out,rect:null,sel:null,z:1,tx:0,ty:0,cssW:0});
+  S.sym=S.sym.map(clampImg);S.cont=S.cont.map(clampImg);if(S.man)S.man=clampImg(S.man);
+  undoStack=[];badge.hidden=true;
+  $('rectinfo').textContent=`Снимок выпрямлен: соотношение сторон ${ratio.toFixed(2)} (${est.how==='persp'?'оценено по перспективе':est.how==='sides'?'снимок почти фронтальный — по длинам сторон':'задано вручную'}). Если рамка выглядит сплющенной, выбери соотношение вручную и выпрями заново.`;
+  buildView();layout();
 };
-window.addEventListener('resize',render);
+$('rectUndo').onclick=()=>{
+  if(!S.Hcum)return;const Hi=hInv(S.Hcum),map=p=>hApply(Hi,p);
+  S.sym=S.sym.map(map);S.cont=S.cont.map(map);if(S.man)S.man=map(S.man);
+  Object.assign(S,{base:S.orig,Hcum:null,sel:null,z:1,tx:0,ty:0,cssW:0});undoStack=[];
+  $('rectinfo').textContent='Возвращено исходное фото.';buildView();layout();
+};
+$('copy').onclick=()=>{const M=measure();if(M.aop!=null)copyText(summary(M));};
+$('png').onclick=exportPNG;
+$('save').onclick=()=>{
+  const M=measure();if(M.aop==null)return;
+  log.push({t:Date.now(),aop:+M.aop.toFixed(1),ph:S.phase,m:S.mode,r:!!S.Hcum,n:$('note').value.trim()});
+  store.set(LOGK,log);$('note').value='';renderLog();toast(`Сохранено в журнал: ${Math.round(M.aop)}°`);
+};
+$('logCopy').onclick=()=>{
+  const lines=log.map((e,i)=>{const {delta}=logLine(e,log[i-1]);return`${fmtDate(new Date(e.t))} — AoP ${Math.round(e.aop)}° (${e.ph==='1'?'I':'II'} период${e.m==='contour'?', по контуру':''})${delta?' · '+delta:''}${e.n?' · '+e.n:''}`;});
+  copyText(lines.join('\n'));
+};
+$('logClear').onclick=()=>{if(confirm('Удалить все записи журнала?')){log=[];store.set(LOGK,log);renderLog();}};
 
-const smp=makeSample();src=smp.canvas;pts=smp.pts;render();
+document.addEventListener('keydown',e=>{
+  if(e.target.closest&&e.target.closest('input,textarea,select'))return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo();return;}
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  const dirs={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+  if(dirs[e.key]&&selValid()){e.preventDefault();const s=e.shiftKey?10:1;if(!e.repeat)pushUndo();nudge(dirs[e.key][0]*s,dirs[e.key][1]*s);return;}
+  if((e.key==='Delete'||e.key==='Backspace')&&selValid()){e.preventDefault();delSel();return;}
+  if(e.key==='+'||e.key==='=')zoomAt(1.25);else if(e.key==='-')zoomAt(0.8);else if(e.key==='0'){S.z=1;S.tx=S.ty=0;render();}
+  else if(e.key==='Escape'){S.sel=null;render();}
+});
+
+if('ResizeObserver'in window)new ResizeObserver(()=>layout()).observe(stage);
+addEventListener('resize',layout);
+
+/* ---------- старт ---------- */
+const smp=makeSample();
+setImage(smp.canvas,true);
+S.sym=[smp.A,smp.B];S.cont=smp.cont;S.man=smp.C;
+renderLog();render();
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(render);
+if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 </script>
 
