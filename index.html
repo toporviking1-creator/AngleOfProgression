@@ -114,6 +114,10 @@ details.panel[open] summary{margin-bottom:8px}
 kbd{font:500 .78rem var(--mono);background:#0f1418;border:1px solid var(--line);border-radius:4px;padding:0 4px}
 /* Заключение: форма слева, лист А4 справа; при печати остаётся только лист */
 body.rep .wrap{display:none}
+#pdfPrev{display:block;width:100%;max-width:794px;margin:0 auto;background:#fff;border-radius:6px;box-shadow:0 6px 28px rgba(0,0,0,.5);min-height:200px}
+@media(max-width:999px){#pdfPrev{order:-1}}
+a.file{text-decoration:none}
+a.file[aria-disabled="true"]{opacity:.45;pointer-events:none}
 #report{max-width:1180px;margin:0 auto}
 .rephead{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin-bottom:16px}
 .repgrid{display:grid;gap:16px;grid-template-columns:1fr}
@@ -149,6 +153,7 @@ input[type=datetime-local]{font:500 .9rem var(--body);color:var(--fg);background
   @page{size:A4;margin:12mm}
   html,body{background:#fff!important;padding:0!important;margin:0!important}
   body.rep .wrap,.rephead,.repform{display:none!important}
+  #pdfPrev{box-shadow:none;border-radius:0;max-width:none}
   .repgrid{display:block}
   .sheet{box-shadow:none;padding:0;max-width:none;border-radius:0;font-size:13px}
   .sheet .st{margin-bottom:10px}
@@ -167,7 +172,7 @@ input[type=datetime-local]{font:500 .9rem var(--body);color:var(--fg);background
 <div class="wrap">
   <header>
     <h1>Угол прогрессии <span>AoP</span></h1>
-    <p class="sub">Трансперинеальное УЗИ · разметка по фото экрана</p>
+    <p class="sub">Трансперинеальное УЗИ · разметка по фото экрана · <span style="color:var(--dim)">версия 2026.10.14</span></p>
   </header>
 
   <div class="main">
@@ -303,7 +308,9 @@ input[type=datetime-local]{font:500 .9rem var(--body);color:var(--fg);background
   <div class="rephead">
     <h1>Заключение</h1>
     <div class="btns">
-      <button id="repPdf" type="button" class="primary">Сохранить PDF</button>
+      <button id="repShare" type="button" class="primary" disabled>Поделиться PDF</button>
+      <a id="repDl" class="file" role="button" aria-disabled="true">Скачать PDF</a>
+      <a id="repOpen" class="file" role="button" target="_blank" rel="noopener" aria-disabled="true">Открыть PDF</a>
       <button id="repPrint" type="button">Печать</button>
       <button id="repCopy" type="button">Копировать текст</button>
       <button id="repClose" type="button">← К разметке</button>
@@ -328,9 +335,10 @@ input[type=datetime-local]{font:500 .9rem var(--body);color:var(--fg);background
       <div class="btns" style="margin:-4px 0 12px"><button id="fRegen" type="button">Сформировать вывод заново</button></div>
       <label>Комментарий<textarea id="fCmt" rows="3" placeholder="Необязательно"></textarea></label>
       <label>Исследование выполнил(а)<input type="text" id="fDoc" maxlength="120" placeholder="ФИО, запоминается"></label>
-      <p class="note">Всё формируется в браузере и никуда не отправляется. «Сохранить PDF» создаёт файл прямо в приложении. Если файл не появляется — открой сайт в Safari или Chrome, а не внутри мессенджера.</p>
+      <p class="note">Всё формируется в браузере и никуда не отправляется. PDF собирается сразу и обновляется при каждом изменении полей. Если файл не появляется — открой сайт в Safari или Chrome, а не внутри мессенджера.</p>
     </div>
-    <article class="sheet" id="sheet">
+    <img id="pdfPrev" alt="Заключение — страница PDF">
+    <article class="sheet" id="sheet" hidden>
       <p class="org" id="rOrg"></p>
       <h2>Заключение</h2>
       <p class="st">Трансперинеальное ультразвуковое исследование: угол прогрессии (AoP)</p>
@@ -960,10 +968,11 @@ function fillSheet(){
   $('rText').textContent=$('fText').value;
   $('rCmt').textContent=$('fCmt').value.trim();$('rCmt').hidden=!$('fCmt').value.trim();
   $('rDoc').textContent=$('fDoc').value.trim();
+  schedulePDF();
 }
 function openReport(){
   const M=measure();if(M.aop==null)return;
-  R.M=M;R.textEdited=false;R.img=annotated(M);$('repMsg').textContent='';
+  R.M=M;R.textEdited=false;R.img=annotated(M);$('repMsg').textContent='';$('pdfPrev').removeAttribute('src');
   $('rImg').src=R.img.toDataURL('image/jpeg',0.92);
   $('fOrg').value=store.get('aop-org','');$('fDoc').value=store.get('aop-doc','');
   $('fDate').value=localDT(new Date());
@@ -1032,8 +1041,7 @@ function sheetCanvas(){
   layoutSheet(g,true,imgMax);
   return c;
 }
-async function pdfFromCanvas(c){
-  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.9)),img=new Uint8Array(await blob.arrayBuffer());
+function pdfFromJpeg(img,w,h){
   const enc=new TextEncoder(),parts=[],offs=[];let pos=0;
   const push=x=>{const b=typeof x==='string'?enc.encode(x):x;parts.push(b);pos+=b.length;};
   const obj=(n,fn)=>{offs[n]=pos;push(`${n} 0 obj\n`);fn();push('\nendobj\n');};
@@ -1041,7 +1049,7 @@ async function pdfFromCanvas(c){
   obj(1,()=>push('<< /Type /Catalog /Pages 2 0 R >>'));
   obj(2,()=>push('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'));
   obj(3,()=>push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>'));
-  obj(4,()=>{push(`<< /Type /XObject /Subtype /Image /Width ${c.width} /Height ${c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`);push(img);push('\nendstream');});
+  obj(4,()=>{push(`<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`);push(img);push('\nendstream');});
   const cs='q 595.28 0 0 841.89 0 0 cm /Im0 Do Q';
   obj(5,()=>push(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
   const xref=pos;
@@ -1049,28 +1057,41 @@ async function pdfFromCanvas(c){
   push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
   return new Blob(parts,{type:'application/pdf'});
 }
-async function savePDF(){
-  const btn=$('repPdf'),msg=$('repMsg');
-  if(!R.M)return;
-  btn.disabled=true;msg.textContent='Создаю PDF…';
+/* PDF готовится заранее: «Поделиться» вызывает системное меню прямо в обработчике нажатия.
+   Иначе iOS отклоняет вызов — пауза на сборку файла «съедает» разрешение от нажатия. */
+const CAN_SHARE=(()=>{try{return!!(navigator.share&&navigator.canShare&&navigator.canShare({files:[new File(['x'],'t.pdf',{type:'application/pdf'})]}));}catch(_){return false;}})();
+let pdfT=0,pdfSeq=0;
+function setPdfReady(ok){
+  $('repShare').disabled=!ok;$('repShare').hidden=!CAN_SHARE;
+  ['repDl','repOpen'].forEach(id=>$(id).setAttribute('aria-disabled',String(!ok)));
+  $('repShare').textContent=ok?'Поделиться PDF':'Готовлю PDF…';
+}
+function schedulePDF(){R.file=null;setPdfReady(false);clearTimeout(pdfT);pdfT=setTimeout(makePDF,300);}
+async function makePDF(){
+  const seq=++pdfSeq;
   try{
     if(document.fonts&&document.fonts.ready)await document.fonts.ready;
-    fillSheet();
-    const pdf=await pdfFromCanvas(sheetCanvas());
+    const c=sheetCanvas(),jpg=await new Promise(r=>c.toBlob(r,'image/jpeg',0.9));
+    if(!jpg)throw new Error('холст не преобразовался в изображение');
+    const pdf=pdfFromJpeg(new Uint8Array(await jpg.arrayBuffer()),c.width,c.height);
+    if(seq!==pdfSeq)return;
     const d=new Date(),name=`AoP_zakluchenie_${Math.round(R.M.aop)}_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.pdf`;
-    const file=new File([pdf],name,{type:'application/pdf'});
-    if(navigator.canShare&&matchMedia('(pointer:coarse)').matches&&navigator.canShare({files:[file]})){
-      try{await navigator.share({files:[file],title:'Заключение AoP'});msg.textContent='Готово.';return;}
-      catch(e){if(e&&e.name==='AbortError'){msg.textContent='Отменено.';return;}}
-    }
-    const url=URL.createObjectURL(pdf),a=document.createElement('a');
-    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
-    msg.innerHTML='';msg.append('PDF сохранён: '+name+'. Если загрузка не началась — ');
-    const open=document.createElement('a');open.href=url;open.target='_blank';open.rel='noopener';open.textContent='открыть PDF';open.style.color='var(--amber)';
-    msg.append(open,'.');
-    setTimeout(()=>URL.revokeObjectURL(url),10*60e3);
-  }catch(e){msg.textContent='Не удалось создать PDF: '+(e&&e.message||e);}
-  finally{btn.disabled=false;}
+    R.file=new File([pdf],name,{type:'application/pdf'});
+    if(R.pdfUrl)URL.revokeObjectURL(R.pdfUrl);if(R.prevUrl)URL.revokeObjectURL(R.prevUrl);
+    R.pdfUrl=URL.createObjectURL(R.file);R.prevUrl=URL.createObjectURL(jpg);
+    $('pdfPrev').src=R.prevUrl;
+    const dl=$('repDl');dl.href=R.pdfUrl;dl.download=name;$('repOpen').href=R.pdfUrl;
+    setPdfReady(true);
+    $('repMsg').textContent=CAN_SHARE?'':'Этот браузер не умеет «Поделиться» файлом — используй «Скачать PDF» или «Открыть PDF». Внутри мессенджеров лучше открыть сайт в Safari или Chrome.';
+  }catch(e){if(seq===pdfSeq)$('repMsg').textContent='Не удалось создать PDF: '+(e&&e.message||e);}
+}
+function sharePDF(){
+  if(!R.file)return;
+  const msg=$('repMsg');
+  navigator.share({files:[R.file],title:'Заключение AoP'}).then(()=>{msg.textContent='Готово.';},e=>{
+    if(e&&e.name==='AbortError')return;
+    msg.textContent='Не удалось открыть «Поделиться» ('+(e&&e.name||e)+'). Используй «Скачать PDF» или «Открыть PDF».';
+  });
 }
 function closeReport(){document.body.classList.remove('rep');$('report').hidden=true;layout();}
 function reportText(){
@@ -1086,7 +1107,7 @@ function reportText(){
 }
 $('repGo').onclick=openReport;$('repClose').onclick=closeReport;
 $('repPrint').onclick=()=>print();
-$('repPdf').onclick=savePDF;
+$('repShare').onclick=sharePDF;
 $('repCopy').onclick=()=>{
   const t=reportText();
   const b=$('repCopy'),done=m=>{b.textContent=m;setTimeout(()=>{b.textContent='Копировать текст';},2500);};
