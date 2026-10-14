@@ -303,10 +303,12 @@ input[type=datetime-local]{font:500 .9rem var(--body);color:var(--fg);background
   <div class="rephead">
     <h1>Заключение</h1>
     <div class="btns">
-      <button id="repPrint" type="button" class="primary">Печать / PDF</button>
+      <button id="repPdf" type="button" class="primary">Сохранить PDF</button>
+      <button id="repPrint" type="button">Печать</button>
       <button id="repCopy" type="button">Копировать текст</button>
       <button id="repClose" type="button">← К разметке</button>
     </div>
+    <p class="note" id="repMsg" role="status" style="flex-basis:100%"></p>
   </div>
   <div class="repgrid">
     <div class="panel repform">
@@ -326,7 +328,7 @@ input[type=datetime-local]{font:500 .9rem var(--body);color:var(--fg);background
       <div class="btns" style="margin:-4px 0 12px"><button id="fRegen" type="button">Сформировать вывод заново</button></div>
       <label>Комментарий<textarea id="fCmt" rows="3" placeholder="Необязательно"></textarea></label>
       <label>Исследование выполнил(а)<input type="text" id="fDoc" maxlength="120" placeholder="ФИО, запоминается"></label>
-      <p class="note">Всё формируется в браузере и никуда не отправляется. «Печать / PDF» → «Сохранить как PDF», чтобы получить файл.</p>
+      <p class="note">Всё формируется в браузере и никуда не отправляется. «Сохранить PDF» создаёт файл прямо в приложении. Если файл не появляется — открой сайт в Safari или Chrome, а не внутри мессенджера.</p>
     </div>
     <article class="sheet" id="sheet">
       <p class="org" id="rOrg"></p>
@@ -961,14 +963,114 @@ function fillSheet(){
 }
 function openReport(){
   const M=measure();if(M.aop==null)return;
-  R.M=M;R.textEdited=false;
-  $('rImg').src=annotated(M).toDataURL('image/jpeg',0.92);
+  R.M=M;R.textEdited=false;R.img=annotated(M);$('repMsg').textContent='';
+  $('rImg').src=R.img.toDataURL('image/jpeg',0.92);
   $('fOrg').value=store.get('aop-org','');$('fDoc').value=store.get('aop-doc','');
   $('fDate').value=localDT(new Date());
   const n=dynEntries().length;$('fDyn').disabled=n<2;$('fDyn').checked=n>=2;
   $('fDynL').textContent=n>=2?`Динамика из журнала (${n} записей за сутки)`:'Динамика из журнала (нужно ≥ 2 записей за сутки)';
   fillSheet();
   document.body.classList.add('rep');$('report').hidden=false;scrollTo(0,0);
+}
+/* Лист заключения рисуется на холсте A4 (200 dpi) и упаковывается в PDF без внешних библиотек и без печати */
+const SANS='"IBM Plex Sans",Arial,sans-serif',MONO='"IBM Plex Mono",monospace';
+function wrapText(g,str,maxW){
+  const out=[];
+  for(const para of String(str).split('\n')){
+    let line='';
+    for(const w of para.split(' ')){const t=line?line+' '+w:w;if(line&&g.measureText(t).width>maxW){out.push(line);line=w;}else line=t;}
+    out.push(line);
+  }
+  return out;
+}
+function layoutSheet(g,draw,imgMax){
+  const W=g.canvas.width,m=118,cw=W-2*m;let y=m;
+  const font=(sz,w,f)=>{g.font=`${w||400} ${sz}px ${f||SANS}`;};
+  const para=(txt,sz,col,w,lh,x,mw)=>{font(sz,w);x=x==null?m:x;
+    for(const l of wrapText(g,txt,mw||cw)){if(draw){g.fillStyle=col;g.fillText(l,x,y);}y+=sz*(lh||1.42);}};
+  const h3=t=>{y+=28;font(24,600);if(draw){g.fillStyle='#333';g.fillText(t.toUpperCase(),m,y);g.fillStyle='#ddd';g.fillRect(m,y+34,cw,2);}y+=48;};
+  const org=$('fOrg').value.trim();
+  if(org){para(org.toUpperCase(),24,'#555',500);y+=8;}
+  para('Заключение',54,'#111',700,1.25);
+  para('Трансперинеальное ультразвуковое исследование: угол прогрессии (AoP)',29,'#444');y+=16;
+  $('rMeta').querySelectorAll('tr').forEach(tr=>{
+    font(28);const a=wrapText(g,tr.cells[0].textContent,cw*.36-16),b=wrapText(g,tr.cells[1].textContent,cw*.64);
+    if(draw){g.fillStyle='#555';a.forEach((l,i)=>g.fillText(l,m,y+i*40));g.fillStyle='#111';b.forEach((l,i)=>g.fillText(l,m+cw*.36,y+i*40));}
+    y+=Math.max(a.length,b.length)*40;
+  });
+  y+=20;
+  const ic=R.img,k=Math.min(cw/ic.width,imgMax/ic.height),iw=ic.width*k,ih=ic.height*k;
+  if(draw)g.drawImage(ic,m+(cw-iw)/2,y,iw,ih);
+  y+=ih+12;
+  para('Голубая линия — длинная ось лобкового симфиза; жёлтая — касательная из нижнего края симфиза к наружному контуру головки плода.',22,'#555',400,1.4);
+  h3('Результат измерения');
+  font(32);const lbl='Угол прогрессии: ',lw=g.measureText(lbl).width;
+  if(draw){g.fillStyle='#111';g.fillText(lbl,m,y+8);font(44,600,MONO);g.fillText(Math.round(R.M.aop)+'°',m+lw,y);}
+  y+=64;
+  $('rMethod').querySelectorAll('li').forEach(li=>{font(27);
+    wrapText(g,li.textContent,cw-34).forEach((l,i)=>{if(draw){g.fillStyle='#111';if(!i)g.fillText('•',m+4,y);g.fillText(l,m+34,y);}y+=27*1.42;});});
+  if(!$('rDynBox').hidden){
+    h3('Динамика');const xs=[m,m+cw*.25,m+cw*.45];
+    const row=(cells,col)=>{font(27);if(draw){g.fillStyle=col;cells.forEach((t,i)=>g.fillText(t,xs[i],y));g.fillStyle='#eee';g.fillRect(m,y+38,cw,2);}y+=46;};
+    row(['Время','AoP','Изменение'],'#555');
+    $('rDyn').querySelectorAll('tr').forEach(tr=>row([...tr.cells].map(c=>c.textContent),'#111'));
+  }
+  h3('Вывод');para($('fText').value,31,'#111',400,1.45);
+  const cmt=$('fCmt').value.trim();if(cmt){y+=10;para(cmt,28,'#111');}
+  y+=54;font(28);const sl='Исследование выполнил(а):',doc=$('fDoc').value.trim(),sw=g.measureText(sl).width,dw=doc?g.measureText(doc).width+20:0;
+  if(draw){g.fillStyle='#111';g.fillText(sl,m,y);if(doc)g.fillText(doc,m+sw+16,y);g.fillRect(m+sw+16+dw,y+32,Math.max(120,cw-sw-16-dw),2);}
+  y+=56;
+  para(document.querySelector('#sheet .disc').textContent,21,'#666',400,1.4);
+  return y+m;
+}
+function sheetCanvas(){
+  const c=document.createElement('canvas');c.width=1654;c.height=2339;
+  const g=c.getContext('2d');g.textBaseline='top';
+  let imgMax=1000;const h=layoutSheet(g,false,imgMax);
+  if(h>c.height)imgMax=Math.max(420,imgMax-(h-c.height));
+  g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);
+  layoutSheet(g,true,imgMax);
+  return c;
+}
+async function pdfFromCanvas(c){
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.9)),img=new Uint8Array(await blob.arrayBuffer());
+  const enc=new TextEncoder(),parts=[],offs=[];let pos=0;
+  const push=x=>{const b=typeof x==='string'?enc.encode(x):x;parts.push(b);pos+=b.length;};
+  const obj=(n,fn)=>{offs[n]=pos;push(`${n} 0 obj\n`);fn();push('\nendobj\n');};
+  push('%PDF-1.4\n%âãÏÓ\n');
+  obj(1,()=>push('<< /Type /Catalog /Pages 2 0 R >>'));
+  obj(2,()=>push('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'));
+  obj(3,()=>push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>'));
+  obj(4,()=>{push(`<< /Type /XObject /Subtype /Image /Width ${c.width} /Height ${c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`);push(img);push('\nendstream');});
+  const cs='q 595.28 0 0 841.89 0 0 cm /Im0 Do Q';
+  obj(5,()=>push(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+  const xref=pos;
+  push('xref\n0 6\n0000000000 65535 f \n'+[1,2,3,4,5].map(n=>String(offs[n]).padStart(10,'0')+' 00000 n \n').join(''));
+  push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts,{type:'application/pdf'});
+}
+async function savePDF(){
+  const btn=$('repPdf'),msg=$('repMsg');
+  if(!R.M)return;
+  btn.disabled=true;msg.textContent='Создаю PDF…';
+  try{
+    if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+    fillSheet();
+    const pdf=await pdfFromCanvas(sheetCanvas());
+    const d=new Date(),name=`AoP_zakluchenie_${Math.round(R.M.aop)}_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.pdf`;
+    const file=new File([pdf],name,{type:'application/pdf'});
+    if(navigator.canShare&&matchMedia('(pointer:coarse)').matches&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'Заключение AoP'});msg.textContent='Готово.';return;}
+      catch(e){if(e&&e.name==='AbortError'){msg.textContent='Отменено.';return;}}
+    }
+    const url=URL.createObjectURL(pdf),a=document.createElement('a');
+    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    msg.innerHTML='';msg.append('PDF сохранён: '+name+'. Если загрузка не началась — ');
+    const open=document.createElement('a');open.href=url;open.target='_blank';open.rel='noopener';open.textContent='открыть PDF';open.style.color='var(--amber)';
+    msg.append(open,'.');
+    setTimeout(()=>URL.revokeObjectURL(url),10*60e3);
+  }catch(e){msg.textContent='Не удалось создать PDF: '+(e&&e.message||e);}
+  finally{btn.disabled=false;}
 }
 function closeReport(){document.body.classList.remove('rep');$('report').hidden=true;layout();}
 function reportText(){
@@ -984,6 +1086,7 @@ function reportText(){
 }
 $('repGo').onclick=openReport;$('repClose').onclick=closeReport;
 $('repPrint').onclick=()=>print();
+$('repPdf').onclick=savePDF;
 $('repCopy').onclick=()=>{
   const t=reportText();
   const b=$('repCopy'),done=m=>{b.textContent=m;setTimeout(()=>{b.textContent='Копировать текст';},2500);};
