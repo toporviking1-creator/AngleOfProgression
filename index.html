@@ -112,6 +112,53 @@ input[type=text]{width:100%}
 details.panel summary{cursor:pointer;font:600 .72rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 details.panel[open] summary{margin-bottom:8px}
 kbd{font:500 .78rem var(--mono);background:#0f1418;border:1px solid var(--line);border-radius:4px;padding:0 4px}
+/* Заключение: форма слева, лист А4 справа; при печати остаётся только лист */
+body.rep .wrap{display:none}
+#report{max-width:1180px;margin:0 auto}
+.rephead{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin-bottom:16px}
+.repgrid{display:grid;gap:16px;grid-template-columns:1fr}
+@media(min-width:1000px){.repgrid{grid-template-columns:340px minmax(0,1fr);align-items:start}.repform{position:sticky;top:16px}}
+.repform label{display:grid;gap:4px;font-size:.85rem;color:var(--muted);margin-bottom:10px}
+.repform label.chk{display:flex;align-items:center;gap:8px}
+.repform select,.repform input[type=datetime-local]{width:100%}
+textarea{font:400 .9rem/1.4 var(--body);color:var(--fg);background:#0f1418;border:1px solid #3a4651;border-radius:8px;padding:9px 10px;width:100%;min-height:96px;resize:vertical}
+input[type=datetime-local]{font:500 .9rem var(--body);color:var(--fg);background:#0f1418;border:1px solid #3a4651;border-radius:8px;padding:8px 10px;color-scheme:dark}
+.sheet{background:#fff;color:#111;border-radius:6px;padding:30px 32px;font:14px/1.45 var(--body);width:100%;max-width:794px;margin:0 auto;box-shadow:0 6px 28px rgba(0,0,0,.5);overflow-wrap:anywhere}
+.sheet .org{font-size:12px;color:#555;text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px}
+.sheet h2{font:700 22px/1.2 var(--body);margin:0}
+.sheet .st{margin:3px 0 16px;color:#444}
+.sheet table{border-collapse:collapse;width:100%}
+.sheet .meta th{text-align:left;font-weight:500;color:#555;width:36%;padding:3px 10px 3px 0;vertical-align:top}
+.sheet .meta td{padding:3px 0}
+.sheet figure{margin:16px 0 0;break-inside:avoid}
+.sheet figure img{display:block;width:100%;max-height:115mm;object-fit:contain;background:#000;border-radius:4px}
+.sheet figcaption{font-size:11.5px;color:#555;margin-top:5px}
+.sheet h3{font:600 12px var(--body);text-transform:uppercase;letter-spacing:.07em;color:#333;margin:18px 0 6px;padding-bottom:3px;border-bottom:1px solid #ddd}
+.sheet .big{font-size:17px;margin:0 0 6px}
+.sheet .big b{font:600 22px var(--mono)}
+.sheet ul{margin:0;padding-left:18px}
+.sheet .dyn th,.sheet .dyn td{text-align:left;padding:3px 12px 3px 0;border-bottom:1px solid #eee;font-variant-numeric:tabular-nums}
+.sheet .dyn th{font-weight:500;color:#555}
+.sheet .concl{white-space:pre-wrap;font-size:15px;margin:0}
+.sheet .cmt{white-space:pre-wrap;margin:8px 0 0}
+.sheet .sign{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:flex-end;margin-top:30px;break-inside:avoid}
+.sheet .sign .line{flex:1;min-width:140px;border-bottom:1px solid #111;height:1.3em}
+.sheet .disc{font-size:11px;color:#666;margin:18px 0 0}
+@media(max-width:600px){.sheet{padding:20px 16px}.sheet .meta th{width:42%}}
+@media print{
+  @page{size:A4;margin:12mm}
+  html,body{background:#fff!important;padding:0!important;margin:0!important}
+  body.rep .wrap,.rephead,.repform{display:none!important}
+  .repgrid{display:block}
+  .sheet{box-shadow:none;padding:0;max-width:none;border-radius:0;font-size:13px}
+  .sheet .st{margin-bottom:10px}
+  .sheet figure{margin-top:10px}
+  .sheet figure img{max-height:92mm}
+  .sheet h3{margin:12px 0 5px;break-after:avoid}
+  .sheet .concl{font-size:14px;break-inside:avoid}
+  .sheet .sign{margin-top:22px}
+  .sheet .disc{margin-top:12px}
+}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -184,6 +231,7 @@ kbd{font:500 .78rem var(--mono);background:#0f1418;border:1px solid var(--line);
           <button id="save" type="button" class="primary">В журнал</button>
           <button id="copy" type="button">Копировать</button>
           <button id="png" type="button">Снимок PNG</button>
+          <button id="repGo" type="button">Заключение</button>
         </div>
         <div id="toast" role="status"></div>
         <div class="legend">
@@ -250,6 +298,57 @@ kbd{font:500 .78rem var(--mono);background:#0f1418;border:1px solid var(--line);
     </div>
   </div>
 </div>
+
+<section id="report" hidden aria-label="Заключение">
+  <div class="rephead">
+    <h1>Заключение</h1>
+    <div class="btns">
+      <button id="repPrint" type="button" class="primary">Печать / PDF</button>
+      <button id="repCopy" type="button">Копировать текст</button>
+      <button id="repClose" type="button">← К разметке</button>
+    </div>
+  </div>
+  <div class="repgrid">
+    <div class="panel repform">
+      <label>Учреждение<input type="text" id="fOrg" maxlength="160" placeholder="Необязательно, запоминается"></label>
+      <label>Пациентка (ФИО или № истории)<input type="text" id="fPat" maxlength="160" placeholder="Необязательно, не сохраняется"></label>
+      <label>Дата и время исследования<input type="datetime-local" id="fDate"></label>
+      <label>Вид затылочного предлежания
+        <select id="fPos">
+          <option value="">не указывать</option>
+          <option>передний вид</option>
+          <option>задний вид</option>
+          <option>поперечное положение стреловидного шва</option>
+        </select>
+      </label>
+      <label class="chk"><input type="checkbox" id="fDyn"> <span id="fDynL">Динамика из журнала</span></label>
+      <label>Вывод<textarea id="fText" rows="6"></textarea></label>
+      <div class="btns" style="margin:-4px 0 12px"><button id="fRegen" type="button">Сформировать вывод заново</button></div>
+      <label>Комментарий<textarea id="fCmt" rows="3" placeholder="Необязательно"></textarea></label>
+      <label>Исследование выполнил(а)<input type="text" id="fDoc" maxlength="120" placeholder="ФИО, запоминается"></label>
+      <p class="note">Всё формируется в браузере и никуда не отправляется. «Печать / PDF» → «Сохранить как PDF», чтобы получить файл.</p>
+    </div>
+    <article class="sheet" id="sheet">
+      <p class="org" id="rOrg"></p>
+      <h2>Заключение</h2>
+      <p class="st">Трансперинеальное ультразвуковое исследование: угол прогрессии (AoP)</p>
+      <table class="meta"><tbody id="rMeta"></tbody></table>
+      <figure>
+        <img id="rImg" alt="Снимок УЗИ с разметкой угла прогрессии">
+        <figcaption>Голубая линия — длинная ось лобкового симфиза; жёлтая — касательная из нижнего края симфиза к наружному контуру головки плода.</figcaption>
+      </figure>
+      <h3>Результат измерения</h3>
+      <p class="big">Угол прогрессии: <b id="rAop"></b></p>
+      <ul id="rMethod"></ul>
+      <div id="rDynBox"><h3>Динамика</h3><table class="dyn"><thead><tr><th>Время</th><th>AoP</th><th>Изменение</th></tr></thead><tbody id="rDyn"></tbody></table></div>
+      <h3>Вывод</h3>
+      <p class="concl" id="rText"></p>
+      <p class="cmt" id="rCmt"></p>
+      <div class="sign"><span>Исследование выполнил(а):</span><span id="rDoc"></span><span class="line"></span></div>
+      <p class="disc">Измерение выполнено по фотографии экрана ультразвукового аппарата с ручной разметкой. Результат носит вспомогательный характер и интерпретируется вместе с клинической картиной. Пороговые значения: Kalache et al., 2009; Torkildsen et al., 2011; ISUOG Practice Guidelines: intrapartum ultrasound, 2018.</p>
+    </article>
+  </div>
+</section>
 
 <script>
 (function(){
@@ -720,7 +819,7 @@ function updateUI(M){
   $('rectApply').disabled=!S.rect||S.rect.length<4;
 
   const has=M.aop!=null,deg=$('deg'),ver=$('verdict');
-  ['save','copy','png'].forEach(id=>$(id).disabled=!has);
+  ['save','copy','png','repGo'].forEach(id=>$(id).disabled=!has);
   const thr=S.phase==='1'?110:120;
   if(has){
     deg.innerHTML=Math.round(M.aop)+'<small>°</small>';
@@ -760,11 +859,15 @@ function copyText(t){
   const ok=()=>toast('Скопировано: '+t),fail=()=>toast(t,'plain');
   try{navigator.clipboard.writeText(t).then(ok,fail);}catch(_){fail();}
 }
+function annotated(M,extra){
+  const W=S.base.width,H=S.base.height,u=Math.max(W,H)/900,c=document.createElement('canvas');
+  c.width=W;c.height=H+(extra||0);const g=c.getContext('2d');
+  g.drawImage(S.view,0,0);drawOverlay(g,u,M,false);return c;
+}
 function exportPNG(){
   const M=measure();if(M.aop==null)return;
   const W=S.base.width,H=S.base.height,u=Math.max(W,H)/900,strip=Math.round(70*u);
-  const c=document.createElement('canvas');c.width=W;c.height=H+strip;const g=c.getContext('2d');
-  g.drawImage(S.view,0,0);drawOverlay(g,u,M,false);
+  const c=annotated(M,strip),g=c.getContext('2d');
   g.fillStyle='#0a0d10';g.fillRect(0,H,W,strip);
   g.textBaseline='middle';g.fillStyle='#fff';g.font=`600 ${28*u}px "IBM Plex Mono",monospace`;
   const big=`AoP ${Math.round(M.aop)}°`,bw=g.measureText(big).width;g.fillText(big,16*u,H+strip/2);
@@ -816,13 +919,90 @@ function renderLog(){
   }
 }
 
+/* ---------- заключение ---------- */
+const R={M:null,textEdited:false};
+const localDT=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function dynEntries(){const since=Date.now()-24*3600e3;return log.filter(e=>e.t>=since);}
+function autoText(M){
+  const a=Math.round(M.aop),p1=S.phase==='1',thr=p1?110:120,ok=a>=thr,per=p1?'I период родов':'II период родов';
+  let t=`Угол прогрессии ${a}° (${per}). `;
+  if(p1)t+=ok?`Значение ≥ ${thr}°: при затянувшемся I периоде ассоциировано с более высокой вероятностью вагинальных родов.`
+             :`Значение < ${thr}°: при затянувшемся I периоде ассоциировано с более высокой вероятностью кесарева сечения. Рекомендована оценка в динамике в сочетании с клиническими данными.`;
+  else t+=ok?`Значение ≥ ${thr}°: ассоциировано с высокой вероятностью самопроизвольных вагинальных родов.`
+            :`Значение < ${thr}°: вероятность самопроизвольных вагинальных родов ниже. Рекомендована оценка в динамике в сочетании с клиническими данными.`;
+  const d=$('fDyn').checked?dynEntries():[];
+  if(d.length>=2){const f=d[0],l=d[d.length-1],dv=Math.round(l.aop-f.aop),dm=Math.round((l.t-f.t)/60000);
+    t+=`\nВ динамике: ${Math.round(f.aop)}° → ${Math.round(l.aop)}° за ${dm<120?dm+' мин':(dm/60).toFixed(1)+' ч'} (${dv>=0?'+':'−'}${Math.abs(dv)}°).`;}
+  return t;
+}
+function methodLines(M){
+  const l=[S.mode==='contour'?`Касательная построена автоматически по контуру черепа (${S.cont.length} точ.)`:'Касательная проведена вручную',
+    S.Hcum?'Перспективное искажение фото экрана исправлено':'Без коррекции перспективы фото'];
+  if(M.warn.length)l.push('Замечания к разметке: '+M.warn.join(' '));
+  return l;
+}
+function fillSheet(){
+  const M=R.M;if(!M)return;
+  $('rOrg').textContent=$('fOrg').value.trim();$('rOrg').hidden=!$('fOrg').value.trim();
+  const dv=$('fDate').value,dt=dv?new Date(dv):new Date();
+  const rows=[['Пациентка',$('fPat').value.trim()||'—'],['Дата и время',isNaN(dt)?'—':fmtDate(dt)],['Период родов',S.phase==='1'?'I период':'II период']];
+  if($('fPos').value)rows.push(['Вид затылочного предлежания',$('fPos').value]);
+  const tb=$('rMeta');tb.innerHTML='';
+  for(const [k,v] of rows){const tr=document.createElement('tr'),th=document.createElement('th'),td=document.createElement('td');th.textContent=k;td.textContent=v;tr.append(th,td);tb.appendChild(tr);}
+  $('rAop').textContent=Math.round(M.aop)+'°';
+  const ul=$('rMethod');ul.innerHTML='';methodLines(M).forEach(t=>{const li=document.createElement('li');li.textContent=t;ul.appendChild(li);});
+  const d=$('fDyn').checked?dynEntries():[],body=$('rDyn');body.innerHTML='';$('rDynBox').hidden=d.length<2;
+  d.forEach((e,i)=>{const tr=document.createElement('tr'),{delta}=logLine(e,d[i-1]),dd=new Date(e.t);
+    [`${pad(dd.getHours())}:${pad(dd.getMinutes())}`,Math.round(e.aop)+'°',delta||'—'].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.appendChild(td);});body.appendChild(tr);});
+  if(!R.textEdited)$('fText').value=autoText(M);
+  $('rText').textContent=$('fText').value;
+  $('rCmt').textContent=$('fCmt').value.trim();$('rCmt').hidden=!$('fCmt').value.trim();
+  $('rDoc').textContent=$('fDoc').value.trim();
+}
+function openReport(){
+  const M=measure();if(M.aop==null)return;
+  R.M=M;R.textEdited=false;
+  $('rImg').src=annotated(M).toDataURL('image/jpeg',0.92);
+  $('fOrg').value=store.get('aop-org','');$('fDoc').value=store.get('aop-doc','');
+  $('fDate').value=localDT(new Date());
+  const n=dynEntries().length;$('fDyn').disabled=n<2;$('fDyn').checked=n>=2;
+  $('fDynL').textContent=n>=2?`Динамика из журнала (${n} записей за сутки)`:'Динамика из журнала (нужно ≥ 2 записей за сутки)';
+  fillSheet();
+  document.body.classList.add('rep');$('report').hidden=false;scrollTo(0,0);
+}
+function closeReport(){document.body.classList.remove('rep');$('report').hidden=true;layout();}
+function reportText(){
+  const out=[];if($('fOrg').value.trim())out.push($('fOrg').value.trim());
+  out.push('ЗАКЛЮЧЕНИЕ','Трансперинеальное УЗИ: угол прогрессии (AoP)');
+  $('rMeta').querySelectorAll('tr').forEach(tr=>out.push(`${tr.cells[0].textContent}: ${tr.cells[1].textContent}`));
+  out.push('',`Угол прогрессии: ${Math.round(R.M.aop)}°`);methodLines(R.M).forEach(t=>out.push('• '+t));
+  if(!$('rDynBox').hidden){out.push('','Динамика:');$('rDyn').querySelectorAll('tr').forEach(tr=>out.push([...tr.cells].map(c=>c.textContent).join(' · ')));}
+  out.push('','Вывод:',$('fText').value);
+  if($('fCmt').value.trim())out.push('',$('fCmt').value.trim());
+  if($('fDoc').value.trim())out.push('','Исследование выполнил(а): '+$('fDoc').value.trim());
+  return out.join('\n');
+}
+$('repGo').onclick=openReport;$('repClose').onclick=closeReport;
+$('repPrint').onclick=()=>print();
+$('repCopy').onclick=()=>{
+  const t=reportText();
+  const b=$('repCopy'),done=m=>{b.textContent=m;setTimeout(()=>{b.textContent='Копировать текст';},2500);};
+  try{navigator.clipboard.writeText(t).then(()=>done('Скопировано ✓'),()=>done('Не удалось скопировать'));}catch(_){done('Не удалось скопировать');}
+};
+['fPat','fDate','fPos','fCmt'].forEach(id=>$(id).addEventListener('input',fillSheet));
+$('fOrg').addEventListener('input',e=>{store.set('aop-org',e.target.value);fillSheet();});
+$('fDoc').addEventListener('input',e=>{store.set('aop-doc',e.target.value);fillSheet();});
+$('fDyn').addEventListener('change',fillSheet);
+$('fText').addEventListener('input',()=>{R.textEdited=true;fillSheet();});
+$('fRegen').onclick=()=>{R.textEdited=false;fillSheet();};
+
 /* ---------- привязка кнопок ---------- */
 $('file').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value='';});
 $('cam').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value='';});
 stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drop');});
 stage.addEventListener('dragleave',()=>stage.classList.remove('drop'));
 stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('drop');loadFile(e.dataTransfer.files[0]);});
-document.addEventListener('paste',e=>{const it=[...((e.clipboardData||{}).items||[])].find(i=>i.type.startsWith('image/'));if(it)loadFile(it.getAsFile());});
+document.addEventListener('paste',e=>{if(document.body.classList.contains('rep'))return;const it=[...((e.clipboardData||{}).items||[])].find(i=>i.type.startsWith('image/'));if(it)loadFile(it.getAsFile());});
 $('undo').onclick=undo;
 $('reset').onclick=()=>{if(S.rect){pushUndo();S.rect=[];}else{pushUndo();S.sym=[];S.cont=[];S.man=null;}S.sel=null;render();};
 $('mContour').onclick=()=>{S.mode='contour';store.set('aop-mode',S.mode);render();};
@@ -885,6 +1065,7 @@ $('logCopy').onclick=()=>{
 $('logClear').onclick=()=>{if(confirm('Удалить все записи журнала?')){log=[];store.set(LOGK,log);renderLog();}};
 
 document.addEventListener('keydown',e=>{
+  if(document.body.classList.contains('rep'))return;
   if(e.target.closest&&e.target.closest('input,textarea,select'))return;
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo();return;}
   if(e.ctrlKey||e.metaKey||e.altKey)return;
